@@ -13,7 +13,6 @@ from ctypes import wintypes
 import math
 import random
 import sys
-import threading
 import time
 from pathlib import Path
 
@@ -26,45 +25,32 @@ _HOST = Path(__file__).resolve().parents[2] / "host"
 if _HOST.is_dir() and str(_HOST) not in sys.path:
     sys.path.insert(0, str(_HOST))
 
-from cg_esp32.device import DeviceError, Esp32Device  # noqa: E402
+from cg_esp32.device import BoardKeeper, DeviceError, Esp32Device, WaitCancelled  # noqa: E402
+from cg_esp32.device.esp32 import find_port  # noqa: E402
 from cg_esp32 import motion  # noqa: E402
 
 
-_device = None
-_device_lock = threading.RLock()
-_port = None  # last port the board answered on
+# Opens the board on first use and reopens it after a replug (the COM number
+# may change). While the bot runs, a lost board pauses it until it is back.
+_keeper = BoardKeeper(Esp32Device, present=lambda: find_port() is not None)
 
 
-def _close_device():
-    global _device
-    if _device is not None:
-        try:
-            _device.close()
-        except Exception:
-            pass
-        _device = None
+def _with_board(op):
+    """Run op(board). If the cable comes out, wait for the board, then run op again."""
+    try:
+        return _keeper.run(op)
+    except WaitCancelled:
+        from source.utils.utils import StopExecution  # utils imports this module
+        raise StopExecution
 
 
-def _open(port=None):
-    global _device, _port
-    _device = Esp32Device(port)
-    _port = _device.port
-    return _device
-
-
-def _get_device():
-    """Open the board on first use; reopen it if the link was lost (e.g. replugged)."""
-    with _device_lock:
-        if _device is not None and not _device.alive:
-            _close_device()
-        if _device is None:
-            try:
-                _open(_port)
-            except DeviceError:
-                if _port is None:
-                    raise
-                _open(None)  # replugged onto another COM number
-        return _device
+def set_board_listener(on_lost=None, on_back=None):
+    """While set, a lost board pauses the bot: on_lost(reason) when it goes,
+    on_back() when it answers again. Stopping the bot ends the wait.
+    Called from the bot thread; the app forwards both to its UI thread."""
+    _keeper.on_lost = on_lost
+    _keeper.on_back = (lambda dev: on_back()) if on_back else None
+    _keeper.cancelled = p.stop_event.is_set
 
 
 def connect(port=None):
@@ -72,21 +58,17 @@ def connect(port=None):
 
     Raises DeviceError when nothing answers. Closes any board opened before.
     """
-    with _device_lock:
-        _close_device()
-        return _open(port)
+    return _keeper.connect(port)
 
 
 def disconnect():
     """Close the board's port, e.g. so the flasher can use it."""
-    with _device_lock:
-        _close_device()
+    _keeper.disconnect()
 
 
 def current_device():
     """The open board, or None."""
-    with _device_lock:
-        return _device if _device is not None and _device.alive else None
+    return _keeper.current()
 
 
 def restore_mouse_settings():
@@ -96,12 +78,14 @@ def restore_mouse_settings():
     touches Windows mouse settings, so letting go of buttons and keys is all
     that is left to do.
     """
-    with _device_lock:
-        dev = _device
-    if dev is None or not dev.alive:
+    dev = _keeper.current()
+    if dev is None:
         return
-    dev.release_all()
-    dev.flush()
+    try:
+        dev.release_all()
+        dev.flush()
+    except DeviceError:
+        pass  # board gone; it starts with nothing held when it comes back
 
 
 class BITMAPINFOHEADER(ctypes.Structure):
@@ -291,9 +275,7 @@ def _sample_hold_seconds(kind, profile=None):
 
 def mouseDown(button='left', delay=0.16, jitter=0.04):
     _fail_safe_check()
-    dev = _get_device()
-    dev.button_down(button)
-    dev.flush()
+    _with_board(lambda dev: (dev.button_down(button), dev.flush()))
     if delay > 0:
         _human_delay(delay, delay + max(0.0, jitter))
     _fail_safe_check()
@@ -301,9 +283,7 @@ def mouseDown(button='left', delay=0.16, jitter=0.04):
 
 def mouseUp(button='left', delay=0.16, jitter=0.05):
     _fail_safe_check()
-    dev = _get_device()
-    dev.button_up(button)
-    dev.flush()
+    _with_board(lambda dev: (dev.button_up(button), dev.flush()))
     if delay > 0:
         _human_delay(delay, delay + max(0.0, jitter))
     _fail_safe_check()
@@ -326,9 +306,7 @@ def _apply_macro_rhythm(profile=None):
     pause, (dx, dy) = maybe_rhythm_jitter(profile)
 
     if dx != 0 or dy != 0:
-        dev = _get_device()
-        dev.move_by(dx, dy)
-        dev.flush()
+        _with_board(lambda dev: (dev.move_by(dx, dy), dev.flush()))
         _human_delay(0.004, 0.012)
 
     if pause > 0:
@@ -376,14 +354,15 @@ def moveTo(x, y, duration=0, delay=0.0, tsize=(5.0, 5.0), offset_x=0, offset_y=0
         profile = get_macro_profile()
         time.sleep(randomize_with_profile(delay, profile=profile, key="delay_jitter"))
 
-    motion.move(
-        _get_device(), end_x, end_y,
+    # After a replug the path is rebuilt from wherever the pointer is then.
+    _with_board(lambda dev: motion.move(
+        dev, end_x, end_y,
         duration=duration if duration and duration > 0 else None,
         target_size=tsize,
         curve=curve,
         n_sub=n_sub,
         inertia=inertia,
-    )
+    ))
     _fail_safe_check()
 
 
@@ -429,13 +408,11 @@ def scroll(clicks, x=None, y=None):
     if x is not None and y is not None:
         moveTo(x, y)
 
-    dev = _get_device()
     direction = 1 if clicks > 0 else -1
     count = abs(int(clicks))
     for _ in range(count):
         _fail_safe_check()
-        dev.scroll(direction)
-        dev.flush()
+        _with_board(lambda dev: (dev.scroll(direction), dev.flush()))
         time.sleep(0.02)
     _human_delay()
 
@@ -448,18 +425,19 @@ def press(keys, presses=1, interval=0.1, delay=0.09):
     if isinstance(keys, str):
         keys = [keys]
 
-    dev = _get_device()
-    for _p in range(presses):
-        for key in keys:
-            _fail_safe_check()
-            dev.key_down(key)
-            dev.flush()
-            key_hold = _sample_hold_seconds("key", profile=profile)
-            time.sleep(key_hold)
-
+    def release(dev):
         for key in reversed(keys):
             dev.key_up(key)
         dev.flush()
+
+    for _p in range(presses):
+        for key in keys:
+            _fail_safe_check()
+            _with_board(lambda dev, key=key: (dev.key_down(key), dev.flush()))
+            key_hold = _sample_hold_seconds("key", profile=profile)
+            time.sleep(key_hold)
+
+        _with_board(release)
 
         if interval > 0 and _p < presses - 1:
             time.sleep(randomize_with_profile(interval, profile=profile, key="key_interval_jitter"))

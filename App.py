@@ -15,6 +15,8 @@ import source.utils.os_esp32_backend as esp32_backend
 
 class MyApp(QWidget):
     webhook_test_result = pyqtSignal(bool, str)
+    board_lost = pyqtSignal(str)   # from the bot thread: the board dropped out mid-run
+    board_back = pyqtSignal()      # ...and answers again
 
     # TODO: I need to decompose this shitty class a bit
     def __init__(self):
@@ -55,6 +57,8 @@ class MyApp(QWidget):
         self._init_ui()
         self._create_buttons()
         self.webhook_test_result.connect(self._handle_webhook_test_result)
+        self.board_lost.connect(self._on_board_lost)
+        self.board_back.connect(self._on_board_back)
 
         self.setFocus()
     
@@ -147,6 +151,15 @@ class MyApp(QWidget):
         self.warn_txt.setGeometry(80, 630, 540, 100)
         self.warn_txt.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.warn_txt.setStyleSheet('color: #FF8080; background: transparent; border: none;')
+
+        # Shown under PAUSED while the board is unplugged mid-run.
+        self.board_msg = QLabel(self.progress)
+        self.board_msg.setFont(QFont(self.family, 20))
+        self.board_msg.setGeometry(50, 560, 600, 160)
+        self.board_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.board_msg.setWordWrap(True)
+        self.board_msg.setStyleSheet('color: #FF8080; background: transparent; border: none;')
+        self.board_msg.hide()
 
         self.selected_button_order = []
         self.selected_card_order = []
@@ -1791,6 +1804,7 @@ class MyApp(QWidget):
 
         p.stop_event.clear()
         p.STOP_REASON = None
+        esp32_backend.set_board_listener(self.board_lost.emit, self.board_back.emit)
 
         self.thread = QThread()
         self.worker = BotWorker(
@@ -1827,6 +1841,35 @@ class MyApp(QWidget):
         self.pause.raise_()
         self.pause.show()
 
+    @pyqtSlot(str)
+    def _on_board_lost(self, reason):
+        # The bot thread waits for the board by itself; Stop still works.
+        logging.warning(f"Board lost: {reason}")
+        self.run.hide()
+        self.rerun.hide()
+        self.warn.hide()
+        self.play.hide()
+        self.pause.raise_()
+        self.pause.show()
+        self.board_msg.setText("USB board disconnected\nPlug it back in and the bot carries on")
+        self.board_msg.raise_()
+        self.board_msg.show()
+        self.device_status.refresh()
+
+    @pyqtSlot()
+    def _on_board_back(self):
+        logging.info("Board back, resuming")
+        self.board_msg.hide()
+        self.play.show()
+        self.pause.hide()
+        self.rerun.raise_()
+        self.rerun.show()
+        self.device_status.refresh()
+
+    def _clear_board_msg(self):
+        self.board_msg.hide()
+        self.play.show()
+
     def proceed(self):
         self.pause.hide()
         self.warn.hide()
@@ -1856,6 +1899,8 @@ class MyApp(QWidget):
         self.pause.hide()
         self.progress.hide()
         self.warn.hide()
+        self._clear_board_msg()
+        self.device_status.refresh()
 
         if self.buttons['update'].isVisible(): self.buttons['update'].resume_flickering()
         
@@ -1864,6 +1909,7 @@ class MyApp(QWidget):
         self.pause.hide()
         self.rerun.hide()
         self.warn.hide()
+        self._clear_board_msg()
 
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Icon.Critical)

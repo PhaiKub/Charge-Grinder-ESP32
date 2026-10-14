@@ -15,7 +15,7 @@ import serial.tools.list_ports
 
 from .. import protocol as p
 from ..keys import button_mask, key_code
-from .base import DeviceError, InputDevice
+from .base import DeviceError, DeviceLost, DeviceRejected, InputDevice
 
 log = logging.getLogger(__name__)
 
@@ -66,11 +66,11 @@ class Esp32Device(InputDevice):
         if link is None:
             port = port or find_port()
             if port is None:
-                raise DeviceError("board not found. Plug in its native USB port.")
+                raise DeviceLost("board not found. Plug in its native USB port.")
             try:
                 link = serial.Serial(port, BAUD, timeout=0.05, write_timeout=1.0)
             except (serial.SerialException, OSError) as exc:
-                raise DeviceError(f"cannot open {port}: {exc}") from exc
+                raise DeviceLost(f"cannot open {port}: {exc}") from exc
         self.port = port
         self._link = link
         self._window = max(1, min(int(window), p.WINDOW))
@@ -104,7 +104,7 @@ class Esp32Device(InputDevice):
                 # read(64) would sit out the whole port timeout on every 5-byte reply.
                 data = self._link.read(max(1, self._link.in_waiting))
             except Exception as exc:  # port vanished (unplugged)
-                self._fail(DeviceError(f"serial link lost: {exc}"))
+                self._fail(DeviceLost(f"serial link lost: {exc}"))
                 return
             if not data:
                 continue
@@ -117,7 +117,7 @@ class Esp32Device(InputDevice):
                         continue
                     pending.reply = reply
                     if reply.status != p.Status.OK and self._error is None:
-                        self._error = DeviceError(
+                        self._error = DeviceRejected(
                             f"device rejected {p.Cmd(pending.cmd).name}: {p.Status(reply.status).name}")
                     self._cond.notify_all()
                 pending.event.set()
@@ -141,7 +141,7 @@ class Esp32Device(InputDevice):
         now = time.monotonic()
         for seq, pending in self._pending.items():
             if now > pending.deadline:
-                raise DeviceError(
+                raise DeviceLost(
                     f"no reply to {p.Cmd(pending.cmd).name} (seq {seq}, {len(self._pending)} in flight, "
                     f"{self._replies} replies so far); device stopped responding")
 
@@ -161,11 +161,11 @@ class Esp32Device(InputDevice):
                 self._link.write(p.encode_request(seq, cmd, payload))
             except Exception as exc:
                 self._pending.pop(seq, None)
-                raise DeviceError(f"serial write failed: {exc}") from exc
+                raise DeviceLost(f"serial write failed: {exc}") from exc
         if not wait:
             return None
         if not pending.event.wait(REPLY_TIMEOUT + extra_ms / 1000):
-            raise DeviceError(f"no reply to {cmd.name}; device stopped responding")
+            raise DeviceLost(f"no reply to {cmd.name}; device stopped responding")
         with self._cond:
             self._raise_if_failed()
         return pending.reply
@@ -259,3 +259,10 @@ class Esp32Device(InputDevice):
 
     def release_all(self):
         self._send(p.Cmd.RELEASE_ALL)
+
+    # ── Board ────────────────────────────────────────────────────────────────
+
+    def set_led(self, on):
+        """Status LED on or off. The board keeps the setting across restarts.
+        Firmware before 0.3.0 doesn't know the command (DeviceRejected)."""
+        self._send(p.Cmd.SET_LED, bytes((1 if on else 0,)), wait=True)

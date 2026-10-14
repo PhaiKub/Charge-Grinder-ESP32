@@ -57,6 +57,10 @@ class MockDevice(InputDevice):
         key_code(key)
         self._log("key_tap", key, hold_ms)
 
+    def set_led(self, on):
+        self.led = bool(on)
+        self._log("set_led", bool(on))
+
     def release_all(self):
         self.buttons = 0
         self.keys.clear()

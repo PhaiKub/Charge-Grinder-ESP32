@@ -7,6 +7,15 @@ class DeviceError(RuntimeError):
     pass
 
 
+class DeviceLost(DeviceError):
+    """The board went away: unplugged, its port vanished, or it stopped answering.
+    Plugging it back in fixes it."""
+
+
+class DeviceRejected(DeviceError):
+    """The board answered with an error status, e.g. for a command its firmware doesn't know."""
+
+
 class InputDevice(ABC):
     """Screen coordinates are pixels on the primary monitor.
 
@@ -60,6 +69,11 @@ class InputDevice(ABC):
         pt = wintypes.POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
         return pt.x, pt.y
+
+    # Board
+    def set_led(self, on: bool) -> None:
+        """Turn the board's status LED on or off."""
+        raise DeviceError("this device has no status LED")
 
     # Housekeeping
     @abstractmethod

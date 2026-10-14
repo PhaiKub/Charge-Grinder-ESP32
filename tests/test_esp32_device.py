@@ -1,7 +1,7 @@
 import pytest
 
 from cg_esp32 import protocol as p
-from cg_esp32.device import DeviceError, Esp32Device, MockDevice
+from cg_esp32.device import DeviceError, DeviceLost, DeviceRejected, Esp32Device, MockDevice
 from cg_esp32.device import esp32
 from fake_device import FakeLink
 
@@ -94,6 +94,55 @@ def test_silent_device_times_out(monkeypatch):
     dev.move_to(5, 5)
     with pytest.raises(DeviceError, match="stopped responding"):
         dev.flush()
+
+
+def test_silent_device_counts_as_lost(monkeypatch):
+    monkeypatch.setattr(esp32, "REPLY_TIMEOUT", 0.2)
+    link = FakeLink()
+    dev = make(link)
+    link.drop_replies = True
+    dev.move_to(5, 5)
+    with pytest.raises(DeviceLost):
+        dev.flush()
+
+
+def test_unplugged_cable_is_lost_not_rejected():
+    link = FakeLink()
+    dev = make(link)
+    link.unplugged = True
+    dev._reader.join(timeout=1.0)
+    assert not dev.alive
+    with pytest.raises(DeviceLost, match="serial link lost"):
+        dev.move_to(5, 5)
+
+
+def test_rejected_command_is_not_lost():
+    link = FakeLink()
+    dev = make(link)
+    link.corrupt_next = 1
+    dev.move_to(10, 10)
+    with pytest.raises(DeviceRejected):
+        dev.flush()
+    dev.close()
+
+
+def test_set_led_sends_on_and_off():
+    link = FakeLink(fw="0.3.0 esp32s3")
+    dev = make(link)
+    dev.set_led(False)
+    dev.set_led(True)
+    assert link.executed == [("SET_LED", 0), ("SET_LED", 1)]
+    dev.close()
+
+
+def test_set_led_on_old_firmware_is_rejected_and_link_keeps_working():
+    link = FakeLink(fw="0.2.0 esp32s3", unknown={p.Cmd.SET_LED})
+    dev = make(link)
+    with pytest.raises(DeviceRejected, match="SET_LED"):
+        dev.set_led(False)
+    dev.move_to(1, 1)
+    dev.flush()
+    dev.close()
 
 
 def test_unknown_key_is_rejected_before_sending():

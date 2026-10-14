@@ -10,10 +10,12 @@ from cg_esp32 import protocol as p
 class FakeLink:
     """Implements the slice of serial.Serial that Esp32Device uses."""
 
-    def __init__(self, proto_version=p.VERSION, fw="test", drop_replies=False, corrupt_next=0):
+    def __init__(self, proto_version=p.VERSION, fw="test", drop_replies=False, corrupt_next=0, unknown=()):
         self.proto_version = proto_version
         self.fw = fw
         self.drop_replies = drop_replies
+        self.unknown = set(unknown)  # commands this firmware doesn't know (older versions)
+        self.unplugged = False
         self.corrupt_next = corrupt_next  # flip a byte in the next N requests
         self.executed: list[tuple] = []
         self.max_in_flight = 0
@@ -38,6 +40,8 @@ class FakeLink:
         return len(data)
 
     def read(self, n):
+        if self.unplugged:
+            raise OSError("ClearCommError failed (PermissionError(13, 'The device does not recognize the command.'))")
         try:
             return self._rx.get(timeout=0.02)
         except queue.Empty:
@@ -77,10 +81,13 @@ class FakeLink:
             name = p.Cmd(cmd).name
         except ValueError:
             return self._reply(seq, p.Status.BAD_CMD)
+        if cmd in self.unknown:
+            return self._reply(seq, p.Status.BAD_CMD)
         fmt = {
             p.Cmd.MOVE_ABS: "<HH", p.Cmd.MOVE_REL: "<hh", p.Cmd.GLIDE_ABS: "<HHH",
             p.Cmd.CLICK: "<BH", p.Cmd.KEY_TAP: "<BH", p.Cmd.SCROLL: "<b",
             p.Cmd.BUTTON_DOWN: "<B", p.Cmd.BUTTON_UP: "<B", p.Cmd.KEY_DOWN: "<B", p.Cmd.KEY_UP: "<B",
+            p.Cmd.SET_LED: "<B",
         }.get(cmd, "")
         if struct.calcsize(fmt) != len(payload):
             return self._reply(seq, p.Status.BAD_LEN)
