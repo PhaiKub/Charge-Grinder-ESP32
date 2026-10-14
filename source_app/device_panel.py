@@ -4,8 +4,9 @@ its LED and flash its firmware.
 It covers the main window below the title bar, like the Bot Config page, and
 uses the same look: dark panels, bronze borders, parchment text, cyan accents
 and the ExcelsiorSans font. At startup the app scans in the background and
-only opens the page when the board needs the user (not found, or a firmware
-update). The BOARD button in the title bar opens and closes it.
+only opens the page when something is wrong (no board, or no answer); a
+firmware update just turns the BOARD button gold. The BOARD button in the
+title bar opens and closes it.
 """
 
 import os
@@ -164,6 +165,7 @@ class DevicePanel(QFrame):
         self._working = False
         self._quiet = False        # scanning in the background at startup
         self._auto_hide = False    # hide again once a board with current firmware answers
+        self.update_ready = False  # the app has newer firmware than the board
         self._refresh_buttons = []
         self._ports = {}
         self._settings = QSettings("Charge-Grinder-ESP32", "device")
@@ -506,6 +508,7 @@ class DevicePanel(QFrame):
             return
         self._working = True
         self.device = None
+        self.update_ready = False
         self._clear_log()
         what = f"Connecting on {port}..." if port else "Scanning for the board..."
         self._set_state("scanning", what)
@@ -562,11 +565,15 @@ class DevicePanel(QFrame):
     def _after_connect(self, dev):
         self._apply_led(dev)
         image = self._image()
-        if image is not None and boards.is_newer(image.version, dev.firmware_version):
+        self.update_ready = image is not None and boards.is_newer(image.version, dev.firmware_version)
+        self.changed.emit()
+        if self.update_ready:
             self._set_state("update", "Firmware Update Available",
                             f"The board runs {dev.firmware_version}; the app has {image.version}. "
                             "The bot still works; flash when convenient.", tone="ok")
-            self._reveal()
+            # Not a problem, so a startup scan leaves the main page up and only
+            # the BOARD button turns gold.
+            self._quiet = self._auto_hide = False
             return
         self._set_state("connected", "Board Connected",
                         f"{dev.port}  ·  firmware {dev.firmware_version}", tone="ok")
@@ -634,6 +641,7 @@ class DevicePanel(QFrame):
         kind = self._ports[port].kind if port in self._ports else "other"
         self._working = True
         self.device = None
+        self.update_ready = False
         self.changed.emit()
         self.progress.setValue(0)
         self._clear_log(progress=True)
@@ -694,15 +702,17 @@ class DevicePanel(QFrame):
 
 class DeviceStatusButton(QPushButton):
     """"BOARD" button in the title bar, styled like the LOG button next to it:
-    cyan when the board is connected, red when not. Click to open or close
+    cyan when the board is connected, gold when a firmware update is waiting,
+    red when not connected. Click to open or close
     the device page."""
 
     STYLE = ("QPushButton {{ color: {fg}; background-color: {bg}; border: 2px solid {edge};"
              " border-radius: 4px; padding: 0; }}"
              "QPushButton:hover {{ color: #ffffff; border: 2px solid {fg}; }}")
 
-    def __init__(self, parent, on_click, family=None):
+    def __init__(self, parent, on_click, family=None, has_update=lambda: False):
         super().__init__("BOARD", parent)
+        self._has_update = has_update
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFont(QFont(family or self.font().family(), 15))
         self.clicked.connect(on_click)
@@ -713,7 +723,10 @@ class DeviceStatusButton(QPushButton):
 
     def refresh(self):
         dev = backend.current_device()
-        if dev is not None:
+        if dev is not None and self._has_update():
+            colours = dict(fg=GOLD, bg="#3a2a0a", edge="#b8893a")
+            tip = f"Board connected on {dev.port}. Firmware update available: click to flash it."
+        elif dev is not None:
             colours = dict(fg="#3fd8f2", bg="#0a2f3b", edge="#1597ad")
             tip = f"Board connected on {dev.port}, firmware {dev.firmware_version}. Click for the board page."
         else:
