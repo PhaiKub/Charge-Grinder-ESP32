@@ -15,6 +15,9 @@ class MockDevice(InputDevice):
     def _log(self, *call):
         self.calls.append(call)
 
+    def position(self):
+        return self.pos
+
     def move_to(self, x, y):
         self.pos = (x, y)
         self._log("move_to", x, y)

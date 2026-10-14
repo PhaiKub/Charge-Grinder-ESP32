@@ -50,6 +50,17 @@ class InputDevice(ABC):
     @abstractmethod
     def key_tap(self, key: str, hold_ms: int = 35) -> None: ...
 
+    def position(self) -> tuple[int, int]:
+        """Where the pointer actually is, read back from Windows."""
+        import sys
+        if sys.platform != "win32":
+            raise DeviceError("reading the pointer position needs Windows")
+        import ctypes
+        from ctypes import wintypes
+        pt = wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+        return pt.x, pt.y
+
     # Housekeeping
     @abstractmethod
     def release_all(self) -> None: ...

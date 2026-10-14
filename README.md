@@ -21,13 +21,14 @@ host/cg_esp32/       Python package used by the app
   protocol.py        frame encode/decode, kept in sync with firmware/src/protocol.h
   keys.py            the single HID key table
   device/            InputDevice interface, Esp32Device, MockDevice
+  motion/            human-like paths (from the original) replayed as absolute moves
 assets/              images used by the app (to be moved over from the original)
 docs/protocol.md     serial protocol spec
 tests/               host tests (pytest), including a fake firmware
 ```
 
-Planned next, as the original code is ported: `host/cg_esp32/motion/`
-(human-like trajectories), `vision/`, `bot/` (battle, shop, teams, …), `ui/`.
+Planned next, as the original code is ported:
+`vision/`, `bot/` (battle, shop, teams, …), `ui/`.
 
 ## How it talks to the board
 
