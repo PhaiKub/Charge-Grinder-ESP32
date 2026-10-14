@@ -9,8 +9,7 @@ from source_app.settings_manager import SettingsManager
 from source_app.widget import SelectizeWidget, IntField, AllIntField
 from source_app.button import CustomButton
 from source_app.run import VersionChecker, BotWorker
-from source_app.check_interception import check_windows
-from source_app.check_linux_backend import check_linux
+from source_app.check_device import check_device
 
 class MyApp(QWidget):
     webhook_test_result = pyqtSignal(bool, str)
@@ -19,10 +18,7 @@ class MyApp(QWidget):
     def __init__(self):
         super().__init__()
 
-        if not check_windows(app_parent=self):
-            raise SystemExit(0)
-
-        if not check_linux(app_parent=self):
+        if not check_device(app_parent=self):
             raise SystemExit(0)
 
         # params
@@ -721,7 +717,7 @@ class MyApp(QWidget):
         self.buttons = {
             'update': CustomButton(self, {
                 'geometry': (202, 24, 298, 53),
-                'click_handler': lambda: webbrowser.open('https://github.com/Walpth/Charge-Grinder/releases/latest'),
+                'click_handler': lambda: webbrowser.open('https://github.com/PhaiKub/Charge-Grinder-ESP32/releases/latest'),
                 'checkable': True,
                 'checked': True,
                 'icon': Bot.APP_PTH['update'],

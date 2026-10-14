@@ -1,7 +1,6 @@
 import sys, os, json, hashlib, copy
 from datetime import datetime, timezone, timedelta
 
-from source_app.run_bridge import BRIDGE_ERROR_MESSAGE, RAISE_ERROR
 import source.utils.params as p
 from source.utils.log_config import *
 import Bot

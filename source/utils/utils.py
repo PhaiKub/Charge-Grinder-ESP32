@@ -4,26 +4,9 @@ import source.utils.params as p
 
 from PySide6.QtCore import QMetaObject, Qt
 
-if platform.system() == "Windows":
-    import source.utils.os_windows_backend as gui
-elif platform.system() == "Linux":
-    _session_type = os.environ.get("XDG_SESSION_TYPE")
-    try:
-        if _session_type == "x11":
-            import source.utils.os_x11_backend as gui
-        elif _session_type == "wayland":
-            import source.utils.os_wayland_backend as gui
-        else:
-            raise RuntimeError(
-                f"Unsupported Linux session type: {_session_type!r}. Expected 'x11' or 'wayland'."
-            )
-    except PermissionError as ex:
-        raise RuntimeError(
-            "Input device access denied on Linux. "
-            "Add your user to the 'input' group and re-login, or run with sufficient permissions."
-        ) from ex
-else:
-    raise RuntimeError("Unsupported OS")
+if platform.system() != "Windows":
+    raise RuntimeError("Charge-Grinder-ESP32 runs on Windows only")
+import source.utils.os_esp32_backend as gui
 
 
 class StopExecution(Exception): pass

@@ -158,6 +158,11 @@ class Esp32Device(InputDevice):
 
     # ── Session ──────────────────────────────────────────────────────────────
 
+    @property
+    def alive(self) -> bool:
+        """False once closed or once the serial port is gone (e.g. unplugged)."""
+        return not self._closed and self._reader.is_alive()
+
     def hello(self) -> str:
         reply = self._send(p.Cmd.HELLO, wait=True)
         if not reply.payload or reply.payload[0] != p.VERSION:
