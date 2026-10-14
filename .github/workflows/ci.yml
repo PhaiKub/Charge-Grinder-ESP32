@@ -2,7 +2,8 @@ name: CI
 
 # Every push to main and every PR: host tests, firmware tests and builds.
 # Tags v*: also the Windows exe and a GitHub Release with the exe and the
-# firmware images. Run it by hand (workflow_dispatch) to get the exe as an
+# firmware images (added to the release if it was already made by hand).
+# Run it by hand (workflow_dispatch) to get the exe as an
 # artifact without releasing.
 
 on:
@@ -20,8 +21,8 @@ jobs:
     name: Host tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -38,11 +39,11 @@ jobs:
       run:
         working-directory: firmware
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ~/.platformio
           key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
@@ -52,7 +53,7 @@ jobs:
         run: pio test -e native
       - name: Build every board (writes dist/<env>.bin + .json)
         run: pio run
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: firmware
           path: firmware/dist/
@@ -64,7 +65,7 @@ jobs:
     needs: [tests, firmware]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check the version file matches the tag
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -74,20 +75,20 @@ jobs:
             echo "::error file=version::The version file says '$version' but the tag is '$GITHUB_REF_NAME'. Put ${GITHUB_REF_NAME#v} in the version file, or tag v$version."
             exit 1
           fi
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
             requirements.txt
             requirements-build.txt
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: firmware
           path: firmware/dist
       - run: pip install -r requirements-build.txt
       - run: python release/build_windows.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: exe
           path: build/Charge-Grinder-ESP32.exe
@@ -101,11 +102,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: exe
           path: assets
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: firmware
           path: firmware
@@ -122,4 +123,10 @@ jobs:
             cp "$bin" "assets/firmware-$env-$fw_version.bin"
           done
           ls -l assets
-          gh release create "$TAG" --title "$TAG" --generate-notes assets/*
+          # A release made by hand first (notes written on GitHub) keeps its
+          # title and notes; it just gets the files.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" assets/* --clobber
+          else
+            gh release create "$TAG" --title "Charge-Grinder-ESP32 $TAG" --generate-notes assets/*
+          fi
