@@ -16,9 +16,20 @@ def test_hello_reads_firmware_version():
     dev.close()
 
 
-def test_protocol_mismatch_refuses():
+def test_hello_splits_version_and_board():
+    dev = make(FakeLink(fw="0.2.0 esp32s3"))
+    assert (dev.firmware_version, dev.firmware_board) == ("0.2.0", "esp32s3")
+    dev.close()
+    dev = make(FakeLink(fw="0.1.0"))
+    assert dev.firmware_board is None
+    dev.close()
+
+
+def test_protocol_mismatch_refuses_and_releases_the_port():
+    link = FakeLink(proto_version=9)
     with pytest.raises(DeviceError, match="protocol 9"):
-        make(FakeLink(proto_version=9))
+        make(link)
+    assert link.closed
 
 
 def test_commands_reach_device_in_order():

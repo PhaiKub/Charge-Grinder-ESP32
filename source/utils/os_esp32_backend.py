@@ -1,4 +1,4 @@
-"""Input/screen backend that drives the mouse and keyboard through the ESP32-S3.
+"""Input/screen backend that drives the mouse and keyboard through the ESP32 board.
 
 Same functions as the original os_windows_backend (moveTo, click, dragTo,
 press, ...) so the bot code calls it unchanged. Screen capture and window
@@ -32,26 +32,61 @@ from cg_esp32 import motion  # noqa: E402
 
 _device = None
 _device_lock = threading.RLock()
+_port = None  # last port the board answered on
+
+
+def _close_device():
+    global _device
+    if _device is not None:
+        try:
+            _device.close()
+        except Exception:
+            pass
+        _device = None
+
+
+def _open(port=None):
+    global _device, _port
+    _device = Esp32Device(port)
+    _port = _device.port
+    return _device
 
 
 def _get_device():
     """Open the board on first use; reopen it if the link was lost (e.g. replugged)."""
-    global _device
     with _device_lock:
         if _device is not None and not _device.alive:
-            try:
-                _device.close()
-            except Exception:
-                pass
-            _device = None
+            _close_device()
         if _device is None:
-            _device = Esp32Device()
+            try:
+                _open(_port)
+            except DeviceError:
+                if _port is None:
+                    raise
+                _open(None)  # replugged onto another COM number
         return _device
 
 
-def connect():
-    """Open the board now and return its firmware version (raises DeviceError)."""
-    return _get_device().firmware_version
+def connect(port=None):
+    """Open the board (on `port`, or the first Espressif port) and return it.
+
+    Raises DeviceError when nothing answers. Closes any board opened before.
+    """
+    with _device_lock:
+        _close_device()
+        return _open(port)
+
+
+def disconnect():
+    """Close the board's port, e.g. so the flasher can use it."""
+    with _device_lock:
+        _close_device()
+
+
+def current_device():
+    """The open board, or None."""
+    with _device_lock:
+        return _device if _device is not None and _device.alive else None
 
 
 def restore_mouse_settings():

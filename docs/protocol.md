@@ -58,7 +58,7 @@ stays off until a firmware/core change is shown to survive `tools/stress.py`.
 
 | cmd  | name          | payload                              | reply payload            |
 |------|---------------|--------------------------------------|--------------------------|
-| 0x01 | HELLO         | –                                    | proto u8, fw version (ASCII) |
+| 0x01 | HELLO         | –                                    | proto u8, "version board" (ASCII) |
 | 0x02 | PING          | –                                    | –                        |
 | 0x10 | MOVE_ABS      | x u16, y u16 (0–32767)               | –                        |
 | 0x11 | MOVE_REL      | dx i16, dy i16                       | –                        |
@@ -88,6 +88,8 @@ Notes:
 
 ## Versioning
 
-`HELLO` returns `PROTO_VERSION`. If it differs from what the host expects, the
+`HELLO` returns `PROTO_VERSION`, then ASCII text: the firmware version and, since
+0.2.0, a space and the board's firmware id (the PlatformIO env, e.g.
+`0.2.0 esp32s3`), which tells the app which image updates this board. If it differs from what the host expects, the
 host refuses to run and offers to flash. The device keeps answering normally;
 there is no hard lock and no auth timeout.

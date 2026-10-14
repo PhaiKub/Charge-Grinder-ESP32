@@ -43,8 +43,10 @@ class FakeLink:
         except queue.Empty:
             return b""
 
+    closed = False
+
     def close(self):
-        pass
+        self.closed = True
 
     # device side
     def _reply(self, seq, status, payload=b""):

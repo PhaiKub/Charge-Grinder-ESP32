@@ -1,4 +1,5 @@
 numpy>=1.26
 opencv-python-headless>=4.10
 PySide6>=6.7
+esptool>=4.7,<5
 pyserial>=3.5

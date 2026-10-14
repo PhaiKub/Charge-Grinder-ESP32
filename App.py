@@ -10,6 +10,8 @@ from source_app.widget import SelectizeWidget, IntField, AllIntField
 from source_app.button import CustomButton
 from source_app.run import VersionChecker, BotWorker
 from source_app.check_device import check_device
+from source_app.device_dialog import DeviceDialog, DeviceStatusButton
+import source.utils.os_esp32_backend as esp32_backend
 
 class MyApp(QWidget):
     webhook_test_result = pyqtSignal(bool, str)
@@ -849,6 +851,10 @@ class MyApp(QWidget):
             self.buttons[name] = CustomButton(self.grace_panel, settings)
 
         self.buttons['update'].hide()
+
+        # Board status dot between the title and the log/csv buttons; opens the device window.
+        self.device_status = DeviceStatusButton(self, lambda: self.thread is not None and self.thread.isRunning())
+        self.device_status.setGeometry(482, 34, 32, 32)
         self.check_version()
 
         self.set_team()
@@ -1768,6 +1774,12 @@ class MyApp(QWidget):
         if not self.check_inputs() or not self.check_sinners():
             self.buttons['guide_icon'].trigger_glow_once()
             return
+
+        if esp32_backend.current_device() is None:
+            DeviceDialog(self).exec()
+            self.device_status.refresh()
+            if esp32_backend.current_device() is None:
+                return
 
         if self.buttons['update'].isVisible(): self.buttons['update'].pause_flickering()
         self.save_affinity()

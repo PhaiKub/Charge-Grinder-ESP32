@@ -12,6 +12,9 @@
 #ifndef FW_VERSION
 #define FW_VERSION "dev"
 #endif
+#ifndef FW_BOARD
+#define FW_BOARD "unknown"
+#endif
 
 using namespace proto;
 
@@ -75,12 +78,14 @@ static void handle(const Frame &f) {
   const uint8_t *p = f.payload;
   switch (f.cmd) {
   case HELLO: {
-    static const char ver[] = FW_VERSION;
+    // "<fw version> <board id>", e.g. "0.2.0 esp32s3"; the board id is the
+    // PlatformIO env, so the app knows which firmware image fits this board.
+    static const char ver[] = FW_VERSION " " FW_BOARD;
     uint8_t out[1 + sizeof(ver)];
     out[0] = VERSION;
     memcpy(out + 1, ver, sizeof(ver) - 1);
     led.set(StatusLed::ACTIVE);
-    return reply(f.seq, Status::OK, out, sizeof(ver)); // proto byte + version without NUL
+    return reply(f.seq, Status::OK, out, sizeof(ver)); // proto byte + text without NUL
   }
   case PING:
     return reply(f.seq, Status::OK);
@@ -165,7 +170,7 @@ static void handle(const Frame &f) {
 void setup() {
   led.update();
 #if CORE_DEBUG_LEVEL > 0
-  // Debug builds: core/USB logs and crash dumps go to the UART (CH340) port.
+  // Debug builds: core/USB logs and crash dumps go to the UART port.
   Serial0.begin(115200);
   Serial0.setDebugOutput(true);
 #endif

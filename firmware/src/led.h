@@ -1,4 +1,7 @@
-// Onboard WS2812 status LED (GPIO 48 on ESP32-S3-DevKitC-1).
+// Onboard status LED. The board's env in platformio.ini sets the pin:
+//   LED_PIN  GPIO of the LED, -1 for none (default 48, ESP32-S3-DevKitC-1)
+//   LED_RGB  1 = WS2812 RGB LED, 0 = plain single-colour LED (on/off only)
+// Colours (a plain LED shows only on/off and the blinks):
 //   yellow blink  booting
 //   purple        ready, no host yet
 //   blue          host said HELLO, commands flowing
@@ -6,6 +9,13 @@
 //   red flash     a frame was rejected (bad CRC / length / command)
 #pragma once
 #include <Arduino.h>
+
+#ifndef LED_PIN
+#define LED_PIN 48
+#endif
+#ifndef LED_RGB
+#define LED_RGB 1
+#endif
 
 class StatusLed {
 public:
@@ -44,14 +54,24 @@ public:
   }
 
 private:
-  static constexpr uint8_t PIN = 48;
   static constexpr uint8_t B = 10;
 
   void write(uint8_t r, uint8_t g, uint8_t b) {
     if (r == r_ && g == g_ && b == b_)
       return; // only touch the RMT peripheral on a real change
     r_ = r, g_ = g, b_ = b;
-    neopixelWrite(PIN, r, g, b);
+#if LED_PIN >= 0
+#if LED_RGB
+    neopixelWrite(LED_PIN, r, g, b);
+#else
+    static bool ready = false;
+    if (!ready) {
+      pinMode(LED_PIN, OUTPUT);
+      ready = true;
+    }
+    digitalWrite(LED_PIN, (r | g | b) ? HIGH : LOW);
+#endif
+#endif
   }
 
   State state_ = BOOTING;

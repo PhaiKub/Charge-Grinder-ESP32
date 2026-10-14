@@ -1,4 +1,4 @@
-"""ESP32-S3 InputDevice over the v1 binary serial protocol (docs/protocol.md).
+"""ESP32 (S3/S2) InputDevice over the v1 binary serial protocol (docs/protocol.md).
 
 A reader thread matches replies by seq. By default only one request is in
 flight (protocol.DEFAULT_WINDOW); a bigger window pipelines requests but
@@ -66,8 +66,12 @@ class Esp32Device(InputDevice):
         if link is None:
             port = port or find_port()
             if port is None:
-                raise DeviceError("ESP32-S3 not found. Plug in its native USB (OTG) port.")
-            link = serial.Serial(port, BAUD, timeout=0.05, write_timeout=1.0)
+                raise DeviceError("board not found. Plug in its native USB port.")
+            try:
+                link = serial.Serial(port, BAUD, timeout=0.05, write_timeout=1.0)
+            except (serial.SerialException, OSError) as exc:
+                raise DeviceError(f"cannot open {port}: {exc}") from exc
+        self.port = port
         self._link = link
         self._window = max(1, min(int(window), p.WINDOW))
         self._parser = p.ReplyParser()
@@ -79,7 +83,17 @@ class Esp32Device(InputDevice):
         self._replies = 0
         self._reader = threading.Thread(target=self._read_loop, name="esp32-reader", daemon=True)
         self._reader.start()
-        self.firmware_version = self.hello()
+        try:
+            text = self.hello()
+        except Exception:
+            self._closed = True
+            self._reader.join(timeout=1.0)
+            self._link.close()
+            raise
+        # "<version> <board>" since firmware 0.2.0; older firmware sends only the version.
+        version, _, board = text.partition(" ")
+        self.firmware_version = version
+        self.firmware_board = board or None
 
     # ── Link ─────────────────────────────────────────────────────────────────
 
