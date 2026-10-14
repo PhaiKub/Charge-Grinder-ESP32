@@ -865,13 +865,13 @@ class MyApp(QWidget):
 
         self.buttons['update'].hide()
 
-        # Device page over everything below the title bar, opened from the status
-        # dot between the title and the log/csv buttons.
+        # Board page over everything below the title bar, opened from the BOARD
+        # button between the title and the log/csv buttons.
         self.device_panel = DevicePanel(self, family=self.family,
                                         is_busy=lambda: self.thread is not None and self.thread.isRunning())
         self.device_panel.setGeometry(0, 92, 700, 693)
-        self.device_status = DeviceStatusButton(self, self.device_panel.toggle_panel)
-        self.device_status.setGeometry(482, 34, 32, 32)
+        self.device_status = DeviceStatusButton(self, self.device_panel.toggle_panel, self.family)
+        self.device_status.setGeometry(467, 35, 53, 28)
         self.device_panel.changed.connect(self.device_status.refresh)
         self.check_version()
 

@@ -1,11 +1,11 @@
-"""Device page inside the main window: find the board, show its status, switch
+"""Board page inside the main window: find the board, show its status, switch
 its LED and flash its firmware.
 
 It covers the main window below the title bar, like the Bot Config page, and
 uses the same look: dark panels, bronze borders, parchment text, cyan accents
 and the ExcelsiorSans font. At startup the app scans in the background and
 only opens the page when the board needs the user (not found, or a firmware
-update). The dot next to the title opens and closes it.
+update). The BOARD button in the title bar opens and closes it.
 """
 
 import os
@@ -611,15 +611,16 @@ class DevicePanel(QFrame):
             else:
                 self.led_note.setText("Needs firmware 0.3.0+: rebuild it (pio run), then flash")
             return
+        on = self._led_on()
         try:
-            dev.set_led(self._led_on())
+            dev.set_led(on)
         except DeviceRejected:
             self.led_note.setText("This firmware can't switch it: flash the firmware")
         except DeviceError as exc:
             self.led_note.setText("Couldn't reach the board")
             self.led_note.setToolTip(str(exc))
         else:
-            self.led_note.setText("")
+            self.led_note.setText(f"Board switched it {'on' if on else 'off'}")
 
     # ── Flash ─────────────────────────────────────────────────────────────────
 
@@ -692,13 +693,18 @@ class DevicePanel(QFrame):
 
 
 class DeviceStatusButton(QPushButton):
-    """Small dot next to the title: cyan when the board is connected, red when
-    not. Click to open or close the device page."""
+    """"BOARD" button in the title bar, styled like the LOG button next to it:
+    cyan when the board is connected, red when not. Click to open or close
+    the device page."""
 
-    def __init__(self, parent, on_click):
-        super().__init__("●", parent)
+    STYLE = ("QPushButton {{ color: {fg}; background-color: {bg}; border: 2px solid {edge};"
+             " border-radius: 4px; padding: 0; }}"
+             "QPushButton:hover {{ color: #ffffff; border: 2px solid {fg}; }}")
+
+    def __init__(self, parent, on_click, family=None):
+        super().__init__("BOARD", parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFont(QFont(self.font().family(), 18))
+        self.setFont(QFont(family or self.font().family(), 15))
         self.clicked.connect(on_click)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
@@ -708,11 +714,10 @@ class DeviceStatusButton(QPushButton):
     def refresh(self):
         dev = backend.current_device()
         if dev is not None:
-            colour = ACCENT
-            tip = f"Board connected on {dev.port}, firmware {dev.firmware_version}. Click for the device page."
+            colours = dict(fg="#3fd8f2", bg="#0a2f3b", edge="#1597ad")
+            tip = f"Board connected on {dev.port}, firmware {dev.firmware_version}. Click for the board page."
         else:
-            colour = ERROR
+            colours = dict(fg=ERROR, bg="#3a0f14", edge="#a04646")
             tip = "Board not connected. Click to connect or flash firmware."
-        self.setStyleSheet(f"QPushButton {{ color: {colour}; background: transparent; border: none; }}"
-                           f"QPushButton:hover {{ color: #ffffff; }}")
+        self.setStyleSheet(self.STYLE.format(**colours))
         self.setToolTip(tip)

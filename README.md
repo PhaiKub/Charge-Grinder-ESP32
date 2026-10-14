@@ -70,7 +70,7 @@ The ESP32-S3 DevKitC-1 has **two separate USB ports** used for different purpose
 The firmware is **already bundled inside `Charge-Grinder-ESP32.exe`**, so there's nothing to compile or download separately.
 
 1. Plug in the board.
-2. Launch `Charge-Grinder-ESP32.exe`. The **Device** window opens at startup (later on, open it from the dot next to the title on the main window).
+2. Launch `Charge-Grinder-ESP32.exe`. The **Board** page opens by itself when the board needs you (not found, or a firmware update). Open it any time with the **BOARD** button in the title bar.
 3. Pick your **Board**, then the flash port:
    * DevKitC-1: the **COM** (UART) port, or the **USB** port if that's your only cable.
    * 1-port ESP32-S3 boards and the S2 Mini: the **USB** port.
@@ -78,7 +78,7 @@ The firmware is **already bundled inside `Charge-Grinder-ESP32.exe`**, so there'
 
 Flashing over the **USB (native) port**: the app restarts the board into download mode (the Arduino 1200-baud reset) and flashes it there, even if it comes back on another COM number. If the board doesn't restart, put it in download mode by hand: hold **BOOT** (**0** on the S2 Mini), press and release **RST**, release **BOOT**, then **Re-scan** and **Flash** again. The S2 Mini needs a press of **RST** when flashing is done.
 
-When the app carries newer firmware than the board, the Device window shows **Firmware Update Available**. The bot still works, so flash when convenient.
+When the app carries newer firmware than the board, the Board page shows **Firmware Update Available**. The bot still works, so flash when convenient.
 
 ### Option B — Build & Flash with PlatformIO (for rebuilding firmware)
 
@@ -113,7 +113,7 @@ There's also an `esp32s3-debug` env that prints ESP-IDF/Arduino logs on the UART
 
 The `esp32s3` image drives a WS2812 RGB LED on GPIO 48 (the DevKitC-1's). The S2 Mini has a plain blue LED on GPIO 15, which shows only on/off and the blinks.
 
-Don't want the light? Switch **Status LED** to **OFF** in the Device window (firmware **0.3.0+**). The board remembers the setting in its flash, so it stays off after a restart.
+Don't want the light? Switch **Status LED** to **OFF** on the Board page (firmware **0.3.0+**). The board remembers the setting in its flash, so it stays off after a restart.
 
 ---
 
@@ -123,9 +123,9 @@ Don't want the light? Switch **Status LED** to **OFF** in the Device window (fir
 1. Download `Charge-Grinder-ESP32.exe` from the [Releases](https://github.com/PhaiKub/Charge-Grinder-ESP32/releases) page. It's a single Windows file with the board firmware inside; no Python needed.
 2. Plug in your board via the **USB (Native OTG)** 🔵 port.
 3. Keep **Limbus Company** running in English, windowed or fullscreen at 16:9 (`1920×1080` or `1280×720`), on the **primary monitor**. The board moves the pointer in absolute coordinates over the primary monitor only.
-4. Launch `Charge-Grinder-ESP32.exe`. The Device window scans for the board:
-   * **Found:** it connects and closes by itself (or offers a firmware update first).
-   * **Not found:** pick the port and **Connect**, or use **⚡ Flash Firmware** if the board has no firmware yet.
+4. Launch `Charge-Grinder-ESP32.exe`. The app scans for the board in the background:
+   * **Found:** the **BOARD** button turns cyan (or the Board page opens to offer a firmware update).
+   * **Not found:** the Board page opens: pick the port and **Connect**, or use **⚡ Flash Firmware** if the board has no firmware yet.
 5. Configure your team and click **Start**.
 
 > 🔌 **Cable came out mid-run?** The bot pauses and shows *USB board disconnected*. Plug the board back in and it carries on by itself. **Stop** still works while it waits.
@@ -139,7 +139,7 @@ cd Charge-Grinder-ESP32
 uv run --with-requirements requirements.txt python App.py
 ```
 
-The Device window flashes from `firmware/dist/`, so build the firmware first ([Option B](#option-b--build--flash-with-platformio-for-rebuilding-firmware)) if you want to flash from source.
+The Board page flashes from `firmware/dist/`, so build the firmware first ([Option B](#option-b--build--flash-with-platformio-for-rebuilding-firmware)) if you want to flash from source.
 
 Host tests:
 
@@ -215,4 +215,4 @@ This project is licensed under the **GNU General Public License v3.0**, same as 
 
 - **Original Framework:** [Walpth/Charge-Grinder](https://github.com/Walpth/Charge-Grinder) by **Walpth** (GPL-3.0). The bot code, UI and image assets come from Charge-Grinder v3.5.3, and the human-like mouse paths are Walpth's work too ([trainer](https://github.com/Walpth/ideal-mouse-movements)).
 - **Earlier ESP32 Port:** [PhaiKub/Activision](https://github.com/PhaiKub/Activision) by PhaiKub & Colors, which this project replaces.
-- **ESP32 Edition:** Developed by PhaiKub (2026). New firmware and binary serial protocol, the ESP32 input backend with absolute mouse moves, more boards, the Device window with built-in firmware flasher and LED switch, and pausing through a lost USB connection.
+- **ESP32 Edition:** Developed by PhaiKub (2026). New firmware and binary serial protocol, the ESP32 input backend with absolute mouse moves, more boards, the Board page with built-in firmware flasher and LED switch, and pausing through a lost USB connection.
