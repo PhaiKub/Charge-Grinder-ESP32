@@ -31,6 +31,9 @@ BRONZE = "#7B6240"
 GOLD = "#f2c46d"
 ERROR = "#FF8080"
 
+# Font sizes in the code are multiplied by this; 1.0 was too small to read.
+UI_SCALE = 1.4
+
 STYLE = f"""
 QDialog {{ background-color: #0d0b09; }}
 QLabel {{ color: {TEXT}; background: transparent; border: none; }}
@@ -59,7 +62,7 @@ QPushButton {{
     background-color: rgba(0, 0, 0, 205);
     border: 1px solid {BRONZE};
     border-radius: 4px;
-    padding: 4px 12px;
+    padding: 6px 16px;
 }}
 QPushButton:hover {{ color: {ACCENT}; border: 1px solid {ACCENT}; }}
 QPushButton:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
@@ -76,13 +79,13 @@ QPushButton#primary:disabled {{
 QPushButton#flash {{ color: {GOLD}; border: 1px solid #b8893a; }}
 QPushButton#flash:hover {{ color: #ffe2a3; border: 1px solid {GOLD}; }}
 QPushButton#flash:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
-QPushButton#icon {{ padding: 2px; min-width: 26px; max-width: 26px; }}
+QPushButton#icon {{ padding: 4px; min-width: 36px; max-width: 36px; }}
 QComboBox {{
     color: {ACCENT};
     background-color: rgba(0, 0, 0, 220);
     border: 1px solid #d3c19b;
     border-radius: 4px;
-    padding: 3px 8px;
+    padding: 5px 10px;
 }}
 QComboBox:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
 QComboBox QAbstractItemView {{
@@ -98,10 +101,10 @@ QProgressBar {{
     border: 1px solid {BRONZE};
     border-radius: 4px;
     text-align: center;
-    min-height: 18px;
+    min-height: 24px;
 }}
 QProgressBar::chunk {{ background-color: #1f7380; border-radius: 3px; }}
-QScrollBar:vertical {{ background: transparent; width: 8px; margin: 0; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; margin: 0; }}
 QScrollBar::handle:vertical {{ background: {BRONZE}; border-radius: 4px; min-height: 20px; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
@@ -160,7 +163,7 @@ class DeviceDialog(QDialog):
         self._signals.flash_done.connect(self._on_flash_done)
 
         family = _font_family()
-        self._font = lambda size: QFont(family, size) if family else QFont(self.font().family(), size)
+        self._font = lambda size: QFont(family or self.font().family(), round(size * UI_SCALE))
 
         if parent is None:
             # A top-level window gets its own taskbar button.
@@ -170,7 +173,7 @@ class DeviceDialog(QDialog):
         if os.path.exists(ICON):
             self.setWindowIcon(QIcon(ICON))
         self.setStyleSheet(STYLE)
-        self.setFixedWidth(560)
+        self.setFixedWidth(780)
         self._build()
         self.adjustSize()
 
@@ -191,8 +194,8 @@ class DeviceDialog(QDialog):
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(22, 18, 22, 18)
-        root.setSpacing(12)
+        root.setContentsMargins(30, 24, 30, 24)
+        root.setSpacing(16)
 
         # Header
         self.symbol = QLabel()
@@ -219,8 +222,8 @@ class DeviceDialog(QDialog):
         box.setContentsMargins(10, 8, 10, 8)
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
-        self.log.setFont(QFont("Consolas", 9))
-        self.log.setFixedHeight(96)
+        self.log.setFont(QFont("Consolas", 11))
+        self.log.setFixedHeight(150)
         box.addWidget(self.log)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
@@ -313,10 +316,10 @@ class DeviceDialog(QDialog):
         label = label_widget or QLabel()
         label.setText(text)
         label.setFont(self._font(11))
-        label.setFixedWidth(78)
+        label.setFixedWidth(115)
         row.addWidget(label)
         combo.setFont(self._font(10))
-        combo.setMinimumWidth(170)
+        combo.setMinimumWidth(230)
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         row.addWidget(combo, 1)
         refresh = self._button("⟳", self._refresh_ports, name="icon")
@@ -604,7 +607,7 @@ class DeviceStatusButton(QPushButton):
         super().__init__("●", parent)
         self._is_busy = is_busy
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFont(QFont(self.font().family(), 15))
+        self.setFont(QFont(self.font().family(), 18))
         self.clicked.connect(self.open_dialog)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
