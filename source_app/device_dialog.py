@@ -19,7 +19,7 @@ import source.utils.os_esp32_backend as backend
 from source.utils.paths import APP_PTH, BASE_PATH, ICON
 
 from cg_esp32 import boards, flasher
-from cg_esp32.device import DeviceError
+from cg_esp32.device import DeviceError, DeviceRejected
 
 FIRMWARE_DIST = os.path.join(BASE_PATH, "firmware", "dist")
 
@@ -80,6 +80,12 @@ QPushButton#flash {{ color: {GOLD}; border: 1px solid #b8893a; }}
 QPushButton#flash:hover {{ color: #ffe2a3; border: 1px solid {GOLD}; }}
 QPushButton#flash:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
 QPushButton#icon {{ padding: 4px; min-width: 36px; max-width: 36px; }}
+QPushButton#toggle {{ color: {MUTED}; padding: 3px 10px; }}
+QPushButton#toggle:checked {{
+    color: {ACCENT};
+    background-color: rgba(17, 61, 70, 205);
+    border: 1px solid {ACCENT};
+}}
 QComboBox {{
     color: {ACCENT};
     background-color: rgba(0, 0, 0, 220);
@@ -176,6 +182,7 @@ class DeviceDialog(QDialog):
         self.setLocale(QLocale(QLocale.Language.English))  # "100%", not the system's digits
         self.setFixedWidth(780)
         self._build()
+        self._show_led()
         self.adjustSize()
 
         saved = self._settings.value("board", boards.DEFAULT_BOARD.id)
@@ -254,6 +261,17 @@ class DeviceDialog(QDialog):
         grid.addWidget(self.status_line)
         self.firmware_line = self._label("", 11, wrap=True)
         grid.addWidget(self.firmware_line)
+        row = QHBoxLayout()
+        row.setSpacing(10)
+        row.addWidget(self._label("Status LED", 11))
+        self.led_btn = self._button("", self._toggle_led, name="toggle")
+        self.led_btn.setCheckable(True)
+        self.led_btn.setFixedWidth(80)
+        self.led_btn.setToolTip("The light on the board. The board remembers this setting.")
+        row.addWidget(self.led_btn)
+        self.led_note = self._label("", 10, muted=True)
+        row.addWidget(self.led_note, 1)
+        grid.addLayout(row)
         root.addWidget(info)
 
         # Run port row
@@ -515,6 +533,7 @@ class DeviceDialog(QDialog):
         self._after_connect(dev, auto_close=self.startup)
 
     def _after_connect(self, dev, auto_close):
+        self._apply_led(dev)
         image = self._image()
         if image is not None and boards.is_newer(image.version, dev.firmware_version):
             self._set_state("update", "Firmware Update Available",
@@ -525,6 +544,43 @@ class DeviceDialog(QDialog):
                         f"{dev.port}  ·  firmware {dev.firmware_version}", tone="ok")
         if auto_close:
             QTimer.singleShot(700, self.accept)
+
+    # ── Status LED ────────────────────────────────────────────────────────────
+
+    def _led_on(self):
+        return self._settings.value("led", True, type=bool)
+
+    def _show_led(self):
+        on = self._led_on()
+        self.led_btn.blockSignals(True)
+        self.led_btn.setChecked(on)
+        self.led_btn.blockSignals(False)
+        self.led_btn.setText("ON" if on else "OFF")
+
+    def _toggle_led(self, checked):
+        self._settings.setValue("led", bool(checked))
+        self._show_led()
+        self._apply_led(self.device)
+
+    def _apply_led(self, dev):
+        """Send the saved LED setting to the board (it keeps it in flash)."""
+        if dev is None:
+            self.led_note.setText("Applied when the board connects")
+            return
+        # Older firmware rejects the command; checked first so a rejection can't
+        # land on the bot's next command while it runs.
+        if boards.version_tuple(dev.firmware_version) < (0, 3, 0):
+            self.led_note.setText("Needs firmware 0.3.0+: flash the firmware first")
+            return
+        try:
+            dev.set_led(self._led_on())
+        except DeviceRejected:
+            self.led_note.setText("This firmware can't switch it: flash the firmware")
+        except DeviceError as exc:
+            self.led_note.setText("Couldn't reach the board")
+            self.led_note.setToolTip(str(exc))
+        else:
+            self.led_note.setText("")
 
     # ── Flash ─────────────────────────────────────────────────────────────────
 
