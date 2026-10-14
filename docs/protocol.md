@@ -60,6 +60,7 @@ stays off until a firmware/core change is shown to survive `tools/stress.py`.
 |------|---------------|--------------------------------------|--------------------------|
 | 0x01 | HELLO         | –                                    | proto u8, "version board" (ASCII) |
 | 0x02 | PING          | –                                    | –                        |
+| 0x03 | SET_LED       | on u8 (0 off, 1 on)                  | –                        |
 | 0x10 | MOVE_ABS      | x u16, y u16 (0–32767)               | –                        |
 | 0x11 | MOVE_REL      | dx i16, dy i16                       | –                        |
 | 0x12 | GLIDE_ABS     | x u16, y u16, duration_ms u16        | –                        |
@@ -83,6 +84,10 @@ Notes:
   when the pointer has arrived, so the host's `flush()` means the move is done.
 - `CLICK` / `KEY_TAP` hold on the device, so timing is not affected by serial
   latency.
+- `SET_LED` turns the status LED on or off and keeps the choice in the board's
+  flash (NVS), so it holds across restarts and before the app connects. Added
+  in firmware 0.3.0; older firmware answers BAD_CMD, so the app checks the
+  version from `HELLO` before sending it.
 - Keys use raw HID usage ids (the same table the original `bridge.py` used), not
   Arduino `KEY_*` values.
 

@@ -19,6 +19,7 @@ ABS_MAX = 32767
 class Cmd(IntEnum):
     HELLO = 0x01
     PING = 0x02
+    SET_LED = 0x03
     MOVE_ABS = 0x10
     MOVE_REL = 0x11
     GLIDE_ABS = 0x12

@@ -13,6 +13,7 @@ constexpr uint8_t MAX_PAYLOAD = 32;
 enum Cmd : uint8_t {
   HELLO = 0x01,
   PING = 0x02,
+  SET_LED = 0x03,
   MOVE_ABS = 0x10,
   MOVE_REL = 0x11,
   GLIDE_ABS = 0x12,

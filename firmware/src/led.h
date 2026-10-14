@@ -7,6 +7,7 @@
 //   blue          host said HELLO, commands flowing
 //   green blink   host connected but idle > 5 s
 //   red flash     a frame was rejected (bad CRC / length / command)
+// The app can switch the LED off (SET_LED); main.cpp keeps that in flash.
 #pragma once
 #include <Arduino.h>
 
@@ -27,6 +28,8 @@ public:
     else
       state_ = s;
   }
+  void enable(bool on) { enabled_ = on; }
+
   void activity() {
     lastActivity_ = millis();
     if (state_ == READY)
@@ -34,6 +37,8 @@ public:
   }
 
   void update() {
+    if (!enabled_)
+      return write(0, 0, 0);
     unsigned long now = millis();
     if (errorAt_ && now - errorAt_ < 200)
       return write(B, 0, 0);
@@ -74,6 +79,7 @@ private:
 #endif
   }
 
+  bool enabled_ = true;
   State state_ = BOOTING;
   unsigned long lastActivity_ = 0;
   unsigned long errorAt_ = 0;

@@ -2,6 +2,7 @@
 // Serial (CDC) in, HID (absolute + relative mouse, keyboard) out, on the
 // native USB port. Protocol: docs/protocol.md.
 #include <Arduino.h>
+#include <Preferences.h>
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 
@@ -22,6 +23,7 @@ static Pointer pointer;
 static USBHIDKeyboard keyboard;
 static StatusLed led;
 static Parser parser;
+static Preferences prefs; // NVS namespace "cg": led (bool, default on)
 
 // ── Glide: absolute move spread over time, one report per millisecond ─────
 static struct {
@@ -89,6 +91,14 @@ static void handle(const Frame &f) {
   }
   case PING:
     return reply(f.seq, Status::OK);
+  case SET_LED: {
+    if (!needLen(f, 1)) return;
+    bool on = p[0] != 0;
+    led.enable(on);
+    if (prefs.getBool("led", true) != on)
+      prefs.putBool("led", on); // only write flash on a real change
+    return reply(f.seq, Status::OK);
+  }
 
   case MOVE_ABS:
     if (!needLen(f, 4)) return;
@@ -168,6 +178,8 @@ static void handle(const Frame &f) {
 }
 
 void setup() {
+  prefs.begin("cg", false);
+  led.enable(prefs.getBool("led", true));
   led.update();
 #if CORE_DEBUG_LEVEL > 0
   // Debug builds: core/USB logs and crash dumps go to the UART port.
