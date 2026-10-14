@@ -5,20 +5,40 @@ __pycache__/
 venv/
 .pytest_cache/
 *.egg-info/
+.coverage
+htmlcov/
 
-# Builds and releases (published via GitHub Releases, never committed)
+# Builds and releases (published via GitHub Releases, never committed).
+# dist/ also covers firmware/dist/, where pio run writes <env>.bin and <env>.json.
 build/
 dist/
 *.exe
 *.bin
 *.elf
 *.map
+# Nuitka writes this on a failed build; it holds local paths
+nuitka-crash-report.xml
 
 # PlatformIO
-firmware/.pio/
+.pio/
+
+# Editors and OS files (PlatformIO IDE writes absolute local paths into .vscode/)
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
 
 # Runtime output
 *.log
-game.csv
+*.csv
 data/
 skill_data/
+testing/
+
+# Personal data: secrets and app settings (the app keeps settings, which can
+# hold a Discord webhook URL, in the home folder; never copy them in here)
+.env
+.env.*
+/settings*.json
+.chargegrinder-webhook-outbox-*.json
