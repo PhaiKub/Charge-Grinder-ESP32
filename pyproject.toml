@@ -1,0 +1,11 @@
+[project]
+name = "charge-grinder-esp32"
+version = "0.1.0"
+description = "Charge-Grinder-ESP32-Edition: Limbus Company bot driven through an ESP32-S3 USB HID device"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.11"
+dependencies = ["pyserial>=3.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["host", "tests"]

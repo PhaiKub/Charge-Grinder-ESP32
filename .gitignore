@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Builds and releases (published via GitHub Releases, never committed)
+build/
+dist/
+*.exe
+*.bin
+*.elf
+*.map
+
+# PlatformIO
+firmware/.pio/
+
+# Runtime output
+*.log
+game.csv
+data/
+skill_data/
