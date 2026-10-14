@@ -181,8 +181,8 @@ App.py, Bot.py       the app (PySide6 UI) and bot entry, from the original
 stats.py             turns game.log into game.csv, from the original
 source/              bot logic (battle, shop, teams, …), from the original
   utils/os_esp32_backend.py   moveTo/click/press/… sent through the board
-source_app/          UI helpers, from the original; device_dialog.py (connect,
-                     status, LED switch, flash firmware) and check_device.py are new
+source_app/          UI helpers, from the original; device_panel.py (the Device
+                     page: connect, status, LED switch, flash) and check_device.py are new
 ImageAssets/         template images and UI assets, from the original
 firmware/            board firmware (PlatformIO, Arduino core), one env per board
   src/               main.cpp, protocol.h, pointer.* (abs + rel mouse HID), led.h

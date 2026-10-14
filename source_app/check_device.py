@@ -1,20 +1,12 @@
 import platform
 
-from PySide6.QtWidgets import QDialog, QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 
 def check_device(app_parent=None):
-    """Find the board before the main window opens.
-
-    Shows the device window, which scans for the board and closes by itself
-    once one answers; from there the user can also pick a port or flash the
-    firmware. Returns False if the user quits without a board.
-    """
+    """The board only works on Windows. The board itself is found by the
+    device page inside the main window (device_panel.py), not here."""
     if platform.system() != "Windows":
         QMessageBox.critical(app_parent, "Windows Only", "Charge-Grinder-ESP32 runs on Windows only.")
         return False
-
-    from source_app.device_dialog import DeviceDialog
-
-    # No parent: the main window isn't shown yet, and an owned dialog gets no taskbar button.
-    return DeviceDialog(None, startup=True).exec() == QDialog.DialogCode.Accepted
+    return True

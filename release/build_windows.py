@@ -118,7 +118,7 @@ def data_files(envs: list[str]) -> list[tuple[Path, str]]:
     """(source, path inside the exe) for single files.
 
     The paths inside match what the app reads next to sys.executable:
-    source/utils/paths.py (assets, version), source_app/device_dialog.py
+    source/utils/paths.py (assets, version), source_app/device_panel.py
     (firmware/dist) and cg_esp32/motion/builder.py (move_assets).
     """
     files = [

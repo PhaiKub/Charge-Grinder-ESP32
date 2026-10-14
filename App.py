@@ -10,7 +10,7 @@ from source_app.widget import SelectizeWidget, IntField, AllIntField
 from source_app.button import CustomButton
 from source_app.run import VersionChecker, BotWorker
 from source_app.check_device import check_device
-from source_app.device_dialog import DeviceDialog, DeviceStatusButton
+from source_app.device_panel import DevicePanel, DeviceStatusButton
 import source.utils.os_esp32_backend as esp32_backend
 
 class MyApp(QWidget):
@@ -865,9 +865,14 @@ class MyApp(QWidget):
 
         self.buttons['update'].hide()
 
-        # Board status dot between the title and the log/csv buttons; opens the device window.
-        self.device_status = DeviceStatusButton(self, lambda: self.thread is not None and self.thread.isRunning())
+        # Device page over everything below the title bar, opened from the status
+        # dot between the title and the log/csv buttons.
+        self.device_panel = DevicePanel(self, family=self.family,
+                                        is_busy=lambda: self.thread is not None and self.thread.isRunning())
+        self.device_panel.setGeometry(0, 92, 700, 693)
+        self.device_status = DeviceStatusButton(self, self.device_panel.toggle_panel)
         self.device_status.setGeometry(482, 34, 32, 32)
+        self.device_panel.changed.connect(self.device_status.refresh)
         self.check_version()
 
         self.set_team()
@@ -883,6 +888,8 @@ class MyApp(QWidget):
         self.set_buttons_active(self.sm.get_config(8))
         self.set_card_buttons(self.sm.get_config(9))
         self.overlay.raise_()
+        # Find the board in the background; the device page opens only if it needs the user.
+        QTimer.singleShot(0, self.device_panel.startup_scan)
 
     def set_team(self):
         # first 7 values - whether button is activated, last - team index
@@ -1789,10 +1796,9 @@ class MyApp(QWidget):
             return
 
         if esp32_backend.current_device() is None:
-            DeviceDialog(self).exec()
-            self.device_status.refresh()
-            if esp32_backend.current_device() is None:
-                return
+            self.device_panel.open_panel()
+            return
+        self.device_panel.hide_panel()
 
         if self.buttons['update'].isVisible(): self.buttons['update'].pause_flickering()
         self.save_affinity()
@@ -1933,7 +1939,7 @@ class ScrollableMyApp(QMainWindow):
         self.base_width = 700
         self.base_height = 785
         
-        self.setWindowTitle(f"ChargeGrinder v{Bot.APP_VERSION}")
+        self.setWindowTitle(f"Charge-Grinder-ESP32 v{Bot.APP_VERSION}")
         self.setWindowIcon(QIcon(Bot.ICON))
         
         self.scroll_area = QScrollArea()

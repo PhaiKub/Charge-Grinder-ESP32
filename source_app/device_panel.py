@@ -1,27 +1,31 @@
-"""Device window: find the board, show its status, and flash its firmware.
+"""Device page inside the main window: find the board, show its status, switch
+its LED and flash its firmware.
 
-Opened at startup (check_device.py) and from the status button on the main
-window. Styled after the main window: dark panels, bronze borders, parchment
-text, cyan accents and the ExcelsiorSans font.
+It covers the main window below the title bar, like the Bot Config page, and
+uses the same look: dark panels, bronze borders, parchment text, cyan accents
+and the ExcelsiorSans font. At startup the app scans in the background and
+only opens the page when the board needs the user (not found, or a firmware
+update). The dot next to the title opens and closes it.
 """
 
 import os
 import threading
 
 from PySide6.QtCore import QLocale, QObject, QSettings, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar,
-    QPushButton, QSizePolicy, QVBoxLayout, QWidget,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton,
+    QSizePolicy, QVBoxLayout,
 )
 
 import source.utils.os_esp32_backend as backend
-from source.utils.paths import APP_PTH, BASE_PATH, ICON
+from source.utils.paths import BASE_PATH
 
 from cg_esp32 import boards, flasher
 from cg_esp32.device import DeviceError, DeviceRejected
 
 FIRMWARE_DIST = os.path.join(BASE_PATH, "firmware", "dist")
+LED_FIRMWARE = (0, 3, 0)  # first firmware with SET_LED
 
 # Main window palette (App.py)
 TEXT = "#EDD1AC"
@@ -31,23 +35,20 @@ BRONZE = "#7B6240"
 GOLD = "#f2c46d"
 ERROR = "#FF8080"
 
-# Font sizes in the code are multiplied by this; 1.0 was too small to read.
-UI_SCALE = 1.4
-
 STYLE = f"""
-QDialog {{ background-color: #0d0b09; }}
+QFrame#devicePanel {{ background-color: rgba(9, 9, 9, 242); }}
 QLabel {{ color: {TEXT}; background: transparent; border: none; }}
 QLabel#muted {{ color: {MUTED}; }}
-QFrame#panel {{
+QFrame#box {{
     background-color: rgba(0, 0, 0, 205);
     border: 1px solid {BRONZE};
     border-radius: 6px;
 }}
-QFrame#panel[tone="error"] {{
+QFrame#box[tone="error"] {{
     background-color: rgba(64, 12, 12, 225);
     border: 1px solid #a04646;
 }}
-QFrame#panel[tone="ok"] {{
+QFrame#box[tone="ok"] {{
     background-color: rgba(17, 61, 70, 160);
     border: 1px solid {ACCENT};
 }}
@@ -62,7 +63,7 @@ QPushButton {{
     background-color: rgba(0, 0, 0, 205);
     border: 1px solid {BRONZE};
     border-radius: 4px;
-    padding: 6px 16px;
+    padding: 3px 12px;
 }}
 QPushButton:hover {{ color: {ACCENT}; border: 1px solid {ACCENT}; }}
 QPushButton:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
@@ -79,19 +80,24 @@ QPushButton#primary:disabled {{
 QPushButton#flash {{ color: {GOLD}; border: 1px solid #b8893a; }}
 QPushButton#flash:hover {{ color: #ffe2a3; border: 1px solid {GOLD}; }}
 QPushButton#flash:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
-QPushButton#icon {{ padding: 4px; min-width: 36px; max-width: 36px; }}
-QPushButton#toggle {{ color: {MUTED}; padding: 3px 10px; }}
+QPushButton#icon {{ padding: 2px; min-width: 30px; max-width: 30px; }}
+QPushButton#toggle {{ color: {MUTED}; padding: 2px 10px; }}
 QPushButton#toggle:checked {{
     color: {ACCENT};
     background-color: rgba(17, 61, 70, 205);
     border: 1px solid {ACCENT};
+}}
+QPushButton#toggle:disabled {{
+    color: #6b5a45;
+    background-color: rgba(0, 0, 0, 205);
+    border: 1px solid #3d3122;
 }}
 QComboBox {{
     color: {ACCENT};
     background-color: rgba(0, 0, 0, 220);
     border: 1px solid #d3c19b;
     border-radius: 4px;
-    padding: 5px 10px;
+    padding: 3px 8px;
 }}
 QComboBox:disabled {{ color: #6b5a45; border: 1px solid #3d3122; }}
 QComboBox QAbstractItemView {{
@@ -107,7 +113,7 @@ QProgressBar {{
     border: 1px solid {BRONZE};
     border-radius: 4px;
     text-align: center;
-    min-height: 24px;
+    min-height: 20px;
 }}
 QProgressBar::chunk {{ background-color: #1f7380; border-radius: 3px; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; margin: 0; }}
@@ -130,17 +136,6 @@ STATES = {
 }
 
 
-def _font_family():
-    path = APP_PTH.get("ExcelsiorSans")
-    if path:
-        font_id = QFontDatabase.addApplicationFont(path)
-        if font_id != -1:
-            families = QFontDatabase.applicationFontFamilies(font_id)
-            if families:
-                return families[0]
-    return None
-
-
 class _Signals(QObject):
     line = Signal(str)
     progress = Signal(int)
@@ -148,68 +143,60 @@ class _Signals(QObject):
     flash_done = Signal(object)   # None on success, error text on failure
 
 
-class DeviceDialog(QDialog):
-    """`startup=True`: scan right away and close by itself once a board with
-    current firmware answers. `busy=True`: the bot is running, so only show
-    the status (connecting or flashing would pull the board from under it).
+class DevicePanel(QFrame):
+    """The device page. `family` is the main window's font; `is_busy()` says
+    whether the bot is running (then the page only shows the status, since
+    connecting or flashing would pull the board from under it).
+
+    `changed` fires whenever the connection may have changed, so the status
+    dot can refresh.
     """
 
-    def __init__(self, parent=None, *, startup=False, busy=False):
+    changed = Signal()
+
+    def __init__(self, parent, *, family, is_busy):
         super().__init__(parent)
-        self.startup = startup
-        self.busy = busy
+        self.setObjectName("devicePanel")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._is_busy = is_busy
+        self.busy = False
         self.device = backend.current_device()
         self._working = False
+        self._quiet = False        # scanning in the background at startup
+        self._auto_hide = False    # hide again once a board with current firmware answers
         self._refresh_buttons = []
+        self._ports = {}
         self._settings = QSettings("Charge-Grinder-ESP32", "device")
         self._signals = _Signals()
         self._signals.line.connect(self._log)
         self._signals.progress.connect(self._on_progress)
         self._signals.scan_done.connect(self._on_scan_done)
         self._signals.flash_done.connect(self._on_flash_done)
+        self._font = lambda size: QFont(family or self.font().family(), size)
 
-        family = _font_family()
-        self._font = lambda size: QFont(family or self.font().family(), round(size * UI_SCALE))
-
-        if parent is None:
-            # A top-level window gets its own taskbar button.
-            self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinimizeButtonHint
-                                | Qt.WindowType.WindowCloseButtonHint)
-        self.setWindowTitle("Charge-Grinder-ESP32 — Device")
-        if os.path.exists(ICON):
-            self.setWindowIcon(QIcon(ICON))
         self.setStyleSheet(STYLE)
         self.setLocale(QLocale(QLocale.Language.English))  # "100%", not the system's digits
-        self.setFixedWidth(780)
         self._build()
         self._show_led()
-        self.adjustSize()
 
         saved = self._settings.value("board", boards.DEFAULT_BOARD.id)
         index = next((i for i, b in enumerate(boards.BOARDS) if b.id == saved), 0)
         self.board_combo.setCurrentIndex(index)
         self._on_board_changed(index)
-        self._refresh_ports()
-
-        if self.busy:
-            self._show_current("busy")
-        elif self.device is not None:
-            self._show_current("connected")
-        if startup or (self.device is None and not self.busy):
-            QTimer.singleShot(150, self.scan)
+        self.hide()
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _build(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(30, 24, 30, 24)
-        root.setSpacing(16)
+        root.setContentsMargins(34, 16, 34, 22)
+        root.setSpacing(10)
 
         # Header
         self.symbol = QLabel()
-        self.symbol.setFont(self._font(22))
+        self.symbol.setFont(self._font(24))
         self.title = QLabel()
-        self.title.setFont(self._font(20))
+        self.title.setFont(self._font(24))
         header = QHBoxLayout()
         header.addStretch()
         header.addWidget(self.symbol)
@@ -217,94 +204,90 @@ class DeviceDialog(QDialog):
         header.addWidget(self.title)
         header.addStretch()
         root.addLayout(header)
-        self.subtitle = QLabel()
-        self.subtitle.setObjectName("muted")
+        self.subtitle = self._label("", 13, muted=True, wrap=True)
         self.subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.subtitle.setWordWrap(True)
-        self.subtitle.setFont(self._font(11))
         root.addWidget(self.subtitle)
 
-        # Message / log panel
-        self.message_panel = self._panel()
-        box = QVBoxLayout(self.message_panel)
-        box.setContentsMargins(10, 8, 10, 8)
+        # Message / log box
+        self.message_box = self._box()
+        box = QVBoxLayout(self.message_box)
+        box.setContentsMargins(10, 6, 10, 6)
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
-        self.log.setFont(QFont("Consolas", 11))
-        self.log.setFixedHeight(150)
+        self.log.setFont(QFont("Consolas", 9))
+        self.log.setFixedHeight(104)
         box.addWidget(self.log)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setLocale(QLocale(QLocale.Language.English))
-        self.progress.setFont(self._font(10))
+        self.progress.setFont(self._font(12))
         self.progress.hide()
         box.addWidget(self.progress)
-        root.addWidget(self.message_panel)
+        self.message_box.hide()  # shown once there is something to log
+        root.addWidget(self.message_box)
 
         # Board + status
-        info = self._panel()
+        info = self._box()
         grid = QVBoxLayout(info)
-        grid.setContentsMargins(12, 10, 12, 10)
-        grid.setSpacing(6)
+        grid.setContentsMargins(12, 8, 12, 8)
+        grid.setSpacing(4)
         row = QHBoxLayout()
-        row.addWidget(self._label("Board", 12))
+        row.addWidget(self._label("Board", 16))
         self.board_combo = QComboBox()
-        self.board_combo.setFont(self._font(11))
+        self.board_combo.setFont(self._font(14))
         for board in boards.BOARDS:
             self.board_combo.addItem(board.name, board.id)
         self.board_combo.currentIndexChanged.connect(self._on_board_changed)
         row.addWidget(self.board_combo, 1)
         grid.addLayout(row)
-        self.ports_help = self._label("", 10, muted=True, wrap=True)
+        self.ports_help = self._label("", 12, muted=True, wrap=True)
         grid.addWidget(self.ports_help)
-        self.status_line = self._label("", 11, wrap=True)
+        self.status_line = self._label("", 14, wrap=True)
         grid.addWidget(self.status_line)
-        self.firmware_line = self._label("", 11, wrap=True)
+        self.firmware_line = self._label("", 14, wrap=True)
         grid.addWidget(self.firmware_line)
         row = QHBoxLayout()
         row.setSpacing(10)
-        row.addWidget(self._label("Status LED", 11))
+        row.addWidget(self._label("Status LED", 14))
         self.led_btn = self._button("", self._toggle_led, name="toggle")
         self.led_btn.setCheckable(True)
-        self.led_btn.setFixedWidth(80)
+        self.led_btn.setFixedWidth(70)
         self.led_btn.setToolTip("The light on the board. The board remembers this setting.")
         row.addWidget(self.led_btn)
-        self.led_note = self._label("", 10, muted=True)
+        self.led_note = self._label("", 12, muted=True)
         row.addWidget(self.led_note, 1)
         grid.addLayout(row)
         root.addWidget(info)
 
-        # Run port row
+        # Bot port row
         self.usb_combo = QComboBox()
         self.connect_btn = self._button("Connect", self.connect_selected, primary=True)
         self.scan_btn = self._button("Re-scan", self.scan)
-        root.addLayout(self._port_row("●", ACCENT, "Bot port", self.usb_combo,
+        root.addLayout(self._port_row(ACCENT, "Bot port", self.usb_combo,
                                       [self.connect_btn, self.scan_btn]))
 
         # Flash port row
         self.flash_combo = QComboBox()
         self.flash_btn = self._button("⚡ Flash Firmware", self.flash, name="flash")
         self.flash_label = QLabel()
-        root.addLayout(self._port_row("●", GOLD, "Flash port", self.flash_combo, [self.flash_btn],
+        root.addLayout(self._port_row(GOLD, "Flash port", self.flash_combo, [self.flash_btn],
                                       label_widget=self.flash_label))
 
-        self.hint = self._label("", 10, muted=True, wrap=True)
+        self.hint = self._label("", 12, muted=True, wrap=True)
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         root.addWidget(self.hint)
+        root.addStretch()
 
-        # Bottom buttons
         bottom = QHBoxLayout()
         bottom.addStretch()
-        self.close_btn = self._button("Quit" if self.startup else "Close", self.reject)
-        self.continue_btn = self._button("Continue", self.accept, primary=True)
-        self.continue_btn.setVisible(self.startup)
+        self.close_btn = self._button("Close Panel", self.hide_panel)
+        self.close_btn.setFont(self._font(16))
         bottom.addWidget(self.close_btn)
-        bottom.addWidget(self.continue_btn)
         root.addLayout(bottom)
 
-    def _panel(self):
+    def _box(self):
         frame = QFrame()
-        frame.setObjectName("panel")
+        frame.setObjectName("box")
         frame.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         return frame
 
@@ -318,7 +301,7 @@ class DeviceDialog(QDialog):
 
     def _button(self, text, handler, *, primary=False, name=None):
         button = QPushButton(text)
-        button.setFont(self._font(11))
+        button.setFont(self._font(14))
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         if primary:
             button.setObjectName("primary")
@@ -327,19 +310,19 @@ class DeviceDialog(QDialog):
         button.clicked.connect(handler)
         return button
 
-    def _port_row(self, dot, colour, text, combo, buttons, label_widget=None):
+    def _port_row(self, colour, text, combo, buttons, label_widget=None):
         row = QHBoxLayout()
-        row.setSpacing(8)
-        dot_label = QLabel(dot)
-        dot_label.setStyleSheet(f"color: {colour};")
-        row.addWidget(dot_label)
+        row.setSpacing(6)
+        dot = QLabel("●")
+        dot.setStyleSheet(f"color: {colour};")
+        row.addWidget(dot)
         label = label_widget or QLabel()
         label.setText(text)
-        label.setFont(self._font(11))
-        label.setFixedWidth(115)
+        label.setFont(self._font(15))
+        label.setFixedWidth(88)
         row.addWidget(label)
-        combo.setFont(self._font(10))
-        combo.setMinimumWidth(230)
+        combo.setFont(self._font(13))
+        combo.setMinimumWidth(170)
         combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         row.addWidget(combo, 1)
         refresh = self._button("⟳", self._refresh_ports, name="icon")
@@ -356,9 +339,46 @@ class DeviceDialog(QDialog):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(QPen(QColor(BRONZE), 2))
-        painter.drawRoundedRect(self.rect().adjusted(4, 4, -5, -5), 8, 8)
+        painter.drawRoundedRect(self.rect().adjusted(14, 4, -15, -8), 8, 8)
         painter.setPen(QPen(QColor("#3a2c1b"), 1))
-        painter.drawRoundedRect(self.rect().adjusted(9, 9, -10, -10), 6, 6)
+        painter.drawRoundedRect(self.rect().adjusted(19, 9, -20, -13), 6, 6)
+
+    # ── Open / close ──────────────────────────────────────────────────────────
+
+    def open_panel(self):
+        """Show the page; scan if no board is connected."""
+        self.busy = self._is_busy()
+        self.device = backend.current_device()
+        self._quiet = False
+        self._auto_hide = False
+        self._refresh_ports()
+        if self.busy:
+            self._set_state("busy", "Bot is running", "Stop the bot to connect again or flash firmware.")
+        elif self.device is not None and not self._working:
+            self._after_connect(self.device)
+        self.show()
+        self.raise_()
+        if self.device is None and not self.busy and not self._working:
+            self.scan()
+
+    def hide_panel(self):
+        if self._working:
+            return
+        self.hide()
+        self.changed.emit()
+
+    def toggle_panel(self):
+        if self.isVisible():
+            self.hide_panel()
+        else:
+            self.open_panel()
+
+    def startup_scan(self):
+        """Look for the board without showing the page; the page opens only
+        if the board is missing or its firmware is out of date."""
+        self._quiet = True
+        self._auto_hide = True
+        self.scan()
 
     # ── State ─────────────────────────────────────────────────────────────────
 
@@ -377,9 +397,9 @@ class DeviceDialog(QDialog):
         self.title.setStyleSheet(f"color: {colour if state in ('not_found', 'flash_failed') else TEXT};")
         self.subtitle.setText(subtitle)
         self.subtitle.setVisible(bool(subtitle))
-        self.message_panel.setProperty("tone", tone or "")
-        self.message_panel.style().unpolish(self.message_panel)
-        self.message_panel.style().polish(self.message_panel)
+        self.message_box.setProperty("tone", tone or "")
+        self.message_box.style().unpolish(self.message_box)
+        self.message_box.style().polish(self.message_box)
         self._update_controls()
 
     def _update_controls(self):
@@ -389,7 +409,6 @@ class DeviceDialog(QDialog):
             widget.setEnabled(idle)
         self.connect_btn.setEnabled(idle and self.usb_combo.count() > 0)
         self.flash_btn.setEnabled(idle and self.flash_combo.count() > 0 and self._image() is not None)
-        self.continue_btn.setEnabled(not self._working and self.device is not None)
         self.close_btn.setEnabled(not self._working)
         self._update_status_lines()
 
@@ -412,22 +431,29 @@ class DeviceDialog(QDialog):
             if on_board and boards.is_newer(image.version, on_board):
                 parts.append("update available")
         else:
-            parts.append("No firmware image for this board in firmware/dist (build it with PlatformIO)")
+            parts.append("No firmware image for this board (build it: pio run)")
         self.firmware_line.setText("  ·  ".join(parts))
         self.firmware_line.setStyleSheet(
             f"color: {GOLD};" if on_board and image and boards.is_newer(image.version, on_board) else "")
 
+    def _clear_log(self, progress=False):
+        self.log.clear()
+        self.progress.setVisible(progress)
+        self.message_box.setVisible(progress)
+
     def _log(self, text, error=False):
+        self.message_box.show()
         colour = ERROR if error else TEXT
         safe = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         self.log.appendHtml(f'<span style="color:{colour}">{safe}</span>')
 
-    def _show_current(self, state):
-        if state == "busy":
-            self._set_state("busy", "Bot is running",
-                            "Stop the bot to connect again or flash firmware.")
-        else:
-            self._after_connect(self.device, auto_close=False)
+    def _reveal(self):
+        """Show the page after a background scan that needs the user."""
+        self._quiet = False
+        self._auto_hide = False
+        if not self.isVisible():
+            self.show()
+            self.raise_()
 
     # ── Board and ports ───────────────────────────────────────────────────────
 
@@ -480,8 +506,7 @@ class DeviceDialog(QDialog):
             return
         self._working = True
         self.device = None
-        self.log.clear()
-        self.progress.hide()
+        self._clear_log()
         what = f"Connecting on {port}..." if port else "Scanning for the board..."
         self._set_state("scanning", what)
         last = self._settings.value("port")
@@ -516,6 +541,7 @@ class DeviceDialog(QDialog):
         self._working = False
         self.device = dev
         self._refresh_ports()
+        self.changed.emit()
         if dev is None:
             if not any(p.kind == "native" for p in self._ports.values()):
                 why = ("The board's USB (native) port isn't plugged in. Plug it in, then Re-scan."
@@ -525,25 +551,31 @@ class DeviceDialog(QDialog):
                 why = ("No board answered. Check the USB cable and that the "
                        "Charge-Grinder-ESP32 firmware is flashed.")
             self._set_state("not_found", "Board Not Found", why, tone="error")
+            self._reveal()
             return
         self._settings.setValue("port", dev.port)
         matched = boards.board_for_firmware(dev.firmware_board, self.board)
         if matched is not None and matched is not self.board:
             self.board_combo.setCurrentIndex(boards.BOARDS.index(matched))
-        self._after_connect(dev, auto_close=self.startup)
+        self._after_connect(dev)
 
-    def _after_connect(self, dev, auto_close):
+    def _after_connect(self, dev):
         self._apply_led(dev)
         image = self._image()
         if image is not None and boards.is_newer(image.version, dev.firmware_version):
             self._set_state("update", "Firmware Update Available",
                             f"The board runs {dev.firmware_version}; the app has {image.version}. "
                             "The bot still works; flash when convenient.", tone="ok")
+            self._reveal()
             return
         self._set_state("connected", "Board Connected",
                         f"{dev.port}  ·  firmware {dev.firmware_version}", tone="ok")
-        if auto_close:
-            QTimer.singleShot(700, self.accept)
+        if self._auto_hide:
+            self._auto_hide = False
+            if self._quiet:
+                self._quiet = False
+            else:
+                QTimer.singleShot(700, self.hide_panel)
 
     # ── Status LED ────────────────────────────────────────────────────────────
 
@@ -564,13 +596,20 @@ class DeviceDialog(QDialog):
 
     def _apply_led(self, dev):
         """Send the saved LED setting to the board (it keeps it in flash)."""
+        self.led_btn.setEnabled(True)
+        self.led_note.setToolTip("")
         if dev is None:
             self.led_note.setText("Applied when the board connects")
             return
         # Older firmware rejects the command; checked first so a rejection can't
         # land on the bot's next command while it runs.
-        if boards.version_tuple(dev.firmware_version) < (0, 3, 0):
-            self.led_note.setText("Needs firmware 0.3.0+: flash the firmware first")
+        if boards.version_tuple(dev.firmware_version) < LED_FIRMWARE:
+            self.led_btn.setEnabled(False)
+            image = self._image()
+            if image is not None and boards.version_tuple(image.version) >= LED_FIRMWARE:
+                self.led_note.setText("Needs firmware 0.3.0+: press Flash Firmware")
+            else:
+                self.led_note.setText("Needs firmware 0.3.0+: rebuild it (pio run), then flash")
             return
         try:
             dev.set_led(self._led_on())
@@ -594,9 +633,9 @@ class DeviceDialog(QDialog):
         kind = self._ports[port].kind if port in self._ports else "other"
         self._working = True
         self.device = None
-        self.log.clear()
+        self.changed.emit()
         self.progress.setValue(0)
-        self.progress.show()
+        self._clear_log(progress=True)
         self._set_state("flashing", "Flashing Firmware",
                         f"{self.board.name}  ·  {image.version}  →  {port}. Don't unplug the board.")
         # A UART bridge resets the chip into download mode by itself. Over the
@@ -651,30 +690,16 @@ class DeviceDialog(QDialog):
             return "This firmware is for a different chip. Pick the right board above."
         return "See the log above. Check the cable and the selected port, then retry."
 
-    # ── Close ─────────────────────────────────────────────────────────────────
-
-    def reject(self):
-        if self._working:
-            return
-        super().reject()
-
-    def closeEvent(self, event):
-        if self._working:
-            event.ignore()
-            return
-        super().closeEvent(event)
-
 
 class DeviceStatusButton(QPushButton):
-    """Small dot on the main window: cyan when the board is connected, red when not.
-    Click to open the device window."""
+    """Small dot next to the title: cyan when the board is connected, red when
+    not. Click to open or close the device page."""
 
-    def __init__(self, parent, is_busy):
+    def __init__(self, parent, on_click):
         super().__init__("●", parent)
-        self._is_busy = is_busy
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFont(QFont(self.font().family(), 18))
-        self.clicked.connect(self.open_dialog)
+        self.clicked.connect(on_click)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.refresh)
         self._timer.start(2000)
@@ -684,14 +709,10 @@ class DeviceStatusButton(QPushButton):
         dev = backend.current_device()
         if dev is not None:
             colour = ACCENT
-            tip = f"Board connected on {dev.port}, firmware {dev.firmware_version}. Click for details."
+            tip = f"Board connected on {dev.port}, firmware {dev.firmware_version}. Click for the device page."
         else:
             colour = ERROR
             tip = "Board not connected. Click to connect or flash firmware."
         self.setStyleSheet(f"QPushButton {{ color: {colour}; background: transparent; border: none; }}"
                            f"QPushButton:hover {{ color: #ffffff; }}")
         self.setToolTip(tip)
-
-    def open_dialog(self):
-        DeviceDialog(self.window(), busy=self._is_busy()).exec()
-        self.refresh()
