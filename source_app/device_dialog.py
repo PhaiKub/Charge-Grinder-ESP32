@@ -168,6 +168,7 @@ class DeviceDialog(QDialog):
         self.setStyleSheet(STYLE)
         self.setFixedWidth(560)
         self._build()
+        self.adjustSize()
 
         saved = self._settings.value("board", boards.DEFAULT_BOARD.id)
         index = next((i for i, b in enumerate(boards.BOARDS) if b.id == saved), 0)
