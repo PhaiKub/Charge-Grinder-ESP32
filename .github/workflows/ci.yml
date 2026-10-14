@@ -1,0 +1,125 @@
+name: CI
+
+# Every push to main and every PR: host tests, firmware tests and builds.
+# Tags v*: also the Windows exe and a GitHub Release with the exe and the
+# firmware images. Run it by hand (workflow_dispatch) to get the exe as an
+# artifact without releasing.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Host tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  firmware:
+    name: Firmware
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: platformio-${{ runner.os }}-
+      - run: pip install platformio
+      - name: Protocol tests on the PC
+        run: pio test -e native
+      - name: Build every board (writes dist/<env>.bin + .json)
+        run: pio run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: firmware/dist/
+          if-no-files-found: error
+
+  exe:
+    name: Windows exe
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: [tests, firmware]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the version file matches the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < version)"
+          if [ "$version" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error file=version::The version file says '$version' but the tag is '$GITHUB_REF_NAME'. Put ${GITHUB_REF_NAME#v} in the version file, or tag v$version."
+            exit 1
+          fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-build.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: firmware/dist
+      - run: pip install -r requirements-build.txt
+      - run: python release/build_windows.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: build/Charge-Grinder-ESP32.exe
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: exe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: exe
+          path: assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: firmware
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # firmware-<env>-<firmware version>.bin, the version from <env>.json
+          for bin in firmware/*.bin; do
+            env="$(basename "$bin" .bin)"
+            fw_version="$(jq -r .version "firmware/$env.json")"
+            cp "$bin" "assets/firmware-$env-$fw_version.bin"
+          done
+          ls -l assets
+          gh release create "$TAG" --title "$TAG" --generate-notes assets/*
