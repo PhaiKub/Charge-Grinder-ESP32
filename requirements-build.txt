@@ -1,0 +1,5 @@
+# Build-only dependencies, not needed to run the app.
+#   uv run --with-requirements requirements-build.txt python release/build_windows.py
+-r requirements.txt
+nuitka>=2.5        # 2.3+ for --windows-console-mode, 2.5+ for Python 3.13
+zstandard>=0.15    # onefile compression
