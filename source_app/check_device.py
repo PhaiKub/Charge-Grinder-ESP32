@@ -16,4 +16,5 @@ def check_device(app_parent=None):
 
     from source_app.device_dialog import DeviceDialog
 
-    return DeviceDialog(app_parent, startup=True).exec() == QDialog.DialogCode.Accepted
+    # No parent: the main window isn't shown yet, and an owned dialog gets no taskbar button.
+    return DeviceDialog(None, startup=True).exec() == QDialog.DialogCode.Accepted

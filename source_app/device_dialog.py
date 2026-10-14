@@ -162,6 +162,10 @@ class DeviceDialog(QDialog):
         family = _font_family()
         self._font = lambda size: QFont(family, size) if family else QFont(self.font().family(), size)
 
+        if parent is None:
+            # A top-level window gets its own taskbar button.
+            self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.WindowMinimizeButtonHint
+                                | Qt.WindowType.WindowCloseButtonHint)
         self.setWindowTitle("Charge-Grinder-ESP32 — Device")
         if os.path.exists(ICON):
             self.setWindowIcon(QIcon(ICON))
@@ -418,19 +422,20 @@ class DeviceDialog(QDialog):
         keep_flash = self.flash_combo.currentData()
         self._ports = {p.device: p for p in ports}
 
-        def fill(combo, preferred_kind, keep):
+        def fill(combo, preferred_kind, keep, choices):
             combo.blockSignals(True)
             combo.clear()
-            for port in ports:
+            for port in choices:
                 combo.addItem(port.label, port.device)
-            target = keep if keep in self._ports else next(
-                (p.device for p in ports if p.kind == preferred_kind), ports[0].device if ports else None)
+            target = keep if any(p.device == keep for p in choices) else next(
+                (p.device for p in choices if p.kind == preferred_kind), choices[0].device if choices else None)
             if target is not None:
                 combo.setCurrentIndex(combo.findData(target))
             combo.blockSignals(False)
 
-        fill(self.usb_combo, "native", keep_usb)
-        fill(self.flash_combo, "uart" if self.board.two_ports else "native", keep_flash)
+        # The bot never runs over a UART bridge, and opening one resets the chip.
+        fill(self.usb_combo, "native", keep_usb, [p for p in ports if p.kind != "uart"])
+        fill(self.flash_combo, "uart" if self.board.two_ports else "native", keep_flash, ports)
         if self.device is not None:
             index = self.usb_combo.findData(self.device.port)
             if index >= 0:
@@ -489,12 +494,14 @@ class DeviceDialog(QDialog):
         self.device = dev
         self._refresh_ports()
         if dev is None:
-            ports = ", ".join(self._ports) or "none"
-            self._set_state(
-                "not_found", "Board Not Found",
-                f"No board answered (ports: {ports}). Check the USB cable and that the "
-                "Charge-Grinder-ESP32 firmware is flashed.",
-                tone="error")
+            if not any(p.kind == "native" for p in self._ports.values()):
+                why = ("The board's USB (native) port isn't plugged in. Plug it in, then Re-scan."
+                       if self.board.two_ports else
+                       "No board on USB. Plug it in, then Re-scan.")
+            else:
+                why = ("No board answered. Check the USB cable and that the "
+                       "Charge-Grinder-ESP32 firmware is flashed.")
+            self._set_state("not_found", "Board Not Found", why, tone="error")
             return
         self._settings.setValue("port", dev.port)
         matched = boards.board_for_firmware(dev.firmware_board, self.board)

@@ -1929,7 +1929,14 @@ class ScrollableMyApp(QMainWindow):
 
 
 if __name__ == "__main__":
+    # Own taskbar identity, so Windows shows the app icon instead of python's.
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("PhaiKub.ChargeGrinderESP32")
+    except Exception:
+        pass
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(Bot.ICON))
     window = ScrollableMyApp()
     window.show()
     sys.exit(app.exec())
