@@ -44,9 +44,10 @@ BOARDS: list[Board] = [
         two_ports=True,
         ports_help=(
             "USB (native OTG): runs the bot.\n"
-            "COM (UART, CH340/CP210x): flashes the firmware."
+            "COM (UART, CH340/CP210x): flashes the firmware. Only one cable? Pick the USB port to flash."
         ),
-        flash_help="Plug in the COM (UART) port, pick it, then Flash Firmware.",
+        flash_help=("Pick the COM (UART) port, or with only the USB cable pick the USB port, "
+                    "then Flash Firmware."),
     ),
     Board(
         id="esp32s3-single",
@@ -54,10 +55,10 @@ BOARDS: list[Board] = [
         chip="esp32s3",
         firmware="esp32s3",
         two_ports=False,
-        ports_help="One USB port: runs the bot, and flashes the firmware in download mode.",
+        ports_help="One USB port: runs the bot and flashes the firmware.",
         flash_help=(
-            "Download mode: hold BOOT, press and release RST, release BOOT. "
-            "Re-scan, pick the port that appears, then Flash Firmware."
+            "Pick the USB port, then Flash Firmware; the app restarts the board into download mode. "
+            "If that fails: hold BOOT, press and release RST, release BOOT, Re-scan, Flash again."
         ),
     ),
     Board(
@@ -66,10 +67,10 @@ BOARDS: list[Board] = [
         chip="esp32s2",
         firmware="lolin_s2_mini",
         two_ports=False,
-        ports_help="One USB port: runs the bot, and flashes the firmware in download mode.",
+        ports_help="One USB port: runs the bot and flashes the firmware.",
         flash_help=(
-            "Download mode: hold 0, press and release RST, release 0. "
-            "Re-scan, pick the port that appears, then Flash Firmware. "
+            "Pick the USB port, then Flash Firmware; the app restarts the board into download mode. "
+            "If that fails: hold 0, press and release RST, release 0, Re-scan, Flash again. "
             "Press RST when flashing is done."
         ),
     ),

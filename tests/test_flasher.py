@@ -56,3 +56,28 @@ def test_flash_wraps_serial_errors(monkeypatch):
     fake_esptool(monkeypatch, body)
     with pytest.raises(flasher.FlashError, match="Access is denied"):
         flasher.flash("COM6", "fw.bin", "esp32s3")
+
+
+def test_download_mode_waits_for_the_port_to_come_back(monkeypatch):
+    import serial
+    touched = []
+    monkeypatch.setattr(serial, "Serial", lambda port, baud: touched.append((port, baud)) or types.SimpleNamespace(dtr=True, close=lambda: None))
+    # COM5 stays for one poll, vanishes, then the ROM port shows up as COM7.
+    states = iter([["COM5"], [], [], ["COM7"]])
+    port = flasher.enter_download_mode("COM5", list_native=lambda: next(states, ["COM7"]), sleep=lambda s: None)
+    assert touched == [("COM5", 1200)]
+    assert port == "COM7"
+
+
+def test_download_mode_keeps_a_port_already_in_download_mode(monkeypatch):
+    import serial
+    monkeypatch.setattr(serial, "Serial", lambda port, baud: types.SimpleNamespace(dtr=True, close=lambda: None))
+    port = flasher.enter_download_mode("COM5", list_native=lambda: ["COM5"], settle=1.0, sleep=lambda s: None)
+    assert port == "COM5"
+
+
+def test_download_mode_gives_up(monkeypatch):
+    import serial
+    monkeypatch.setattr(serial, "Serial", lambda port, baud: types.SimpleNamespace(dtr=True, close=lambda: None))
+    with pytest.raises(flasher.FlashError, match="did not come back"):
+        flasher.enter_download_mode("COM5", list_native=lambda: [], timeout=1.0, sleep=lambda s: None)

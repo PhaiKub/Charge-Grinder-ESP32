@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import re
+import time
 from typing import Callable
 
 FLASH_BAUD = 460800
@@ -18,6 +19,46 @@ _PROGRESS = re.compile(r"\((\d{1,3}) ?%\)")
 
 class FlashError(Exception):
     pass
+
+
+def enter_download_mode(port: str, *, list_native: Callable[[], list[str]],
+                        on_line: Callable[[str], None] | None = None,
+                        settle: float = 3.0, timeout: float = 10.0,
+                        sleep: Callable[[float], None] = time.sleep) -> str:
+    """Restart a board running on its native USB port into ROM download mode
+    and return the port it comes back on (the COM number may change).
+
+    Uses the Arduino "1200 baud touch": opening the TinyUSB serial port at
+    1200 baud makes the firmware restart into the bootloader. A board that is
+    already in download mode ignores it and keeps its port.
+    """
+    say = on_line or (lambda _line: None)
+    say(f"Restarting the board on {port} into download mode...")
+    try:
+        import serial
+        link = serial.Serial(port, 1200)
+        link.dtr = False
+        link.close()
+    except Exception as exc:  # already gone, or a ROM port that dislikes 1200 baud
+        say(f"{port}: {exc}")
+
+    # Wait for the port to drop off the bus (it may not, if the board was
+    # already in download mode), then for a native port to come back.
+    waited = 0.0
+    while waited < settle and port in list_native():
+        sleep(0.25)
+        waited += 0.25
+    waited = 0.0
+    while waited < timeout:
+        ports = list_native()
+        if ports:
+            sleep(0.5)  # let Windows finish installing the port
+            chosen = next((p for p in ports if p != port), ports[0])
+            say(f"Download mode port: {chosen}")
+            return chosen
+        sleep(0.25)
+        waited += 0.25
+    raise FlashError("the board did not come back in download mode")
 
 
 class _LineWriter(io.TextIOBase):

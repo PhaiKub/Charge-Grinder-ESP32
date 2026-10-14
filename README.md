@@ -69,9 +69,12 @@ next to the title on the main window). Pick the board and the flash port, then
 **Flash Firmware**.
 
 - 2-port boards (ESP32-S3 DevKitC-1): flash through the **COM/UART** port; the
-  bot runs on the **USB** (native) port.
-- 1-port boards: put the board in download mode first (hold BOOT/0, press RST,
-  release), Re-scan, pick the port, then Flash.
+  bot runs on the **USB** (native) port. With only the USB cable, pick the USB
+  port to flash.
+- Flashing over the USB (native) port: the app restarts the board into download
+  mode (the Arduino 1200-baud reset) and flashes it there. If the board doesn't
+  restart, put it in download mode by hand (hold BOOT/0, press RST, release),
+  Re-scan, and Flash again.
 
 Flashing from PlatformIO still works:
 `pio run -e esp32s3 -t upload --upload-port COM6` (the UART port).

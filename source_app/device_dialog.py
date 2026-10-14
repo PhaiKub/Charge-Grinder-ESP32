@@ -8,7 +8,7 @@ text, cyan accents and the ExcelsiorSans font.
 import os
 import threading
 
-from PySide6.QtCore import QObject, QSettings, Qt, QTimer, Signal
+from PySide6.QtCore import QLocale, QObject, QSettings, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QFontDatabase, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar,
@@ -173,6 +173,7 @@ class DeviceDialog(QDialog):
         if os.path.exists(ICON):
             self.setWindowIcon(QIcon(ICON))
         self.setStyleSheet(STYLE)
+        self.setLocale(QLocale(QLocale.Language.English))  # "100%", not the system's digits
         self.setFixedWidth(780)
         self._build()
         self.adjustSize()
@@ -227,6 +228,7 @@ class DeviceDialog(QDialog):
         box.addWidget(self.log)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
+        self.progress.setLocale(QLocale(QLocale.Language.English))
         self.progress.setFont(self._font(10))
         self.progress.hide()
         box.addWidget(self.progress)
@@ -541,14 +543,19 @@ class DeviceDialog(QDialog):
         self.progress.show()
         self._set_state("flashing", "Flashing Firmware",
                         f"{self.board.name}  ·  {image.version}  →  {port}. Don't unplug the board.")
-        # The UART bridge can reset the chip into download mode by itself; a
-        # native USB port must already be in download mode (BOOT + RST).
+        # A UART bridge resets the chip into download mode by itself. Over the
+        # native USB port the app restarts the board into download mode first
+        # (one cable is enough); a board already there (BOOT + RST) just stays.
         reset = kind == "uart"
         threading.Thread(target=self._flash_task, args=(port, image, reset), daemon=True).start()
 
     def _flash_task(self, port, image, reset):
         backend.disconnect()  # frees the port if the bot's connection held it
         try:
+            if not reset:
+                port = flasher.enter_download_mode(
+                    port, list_native=lambda: [p.device for p in boards.list_ports() if p.kind == "native"],
+                    on_line=self._signals.line.emit)
             flasher.flash(port, str(image.path), image.chip, reset=reset,
                           on_line=self._signals.line.emit, on_progress=self._signals.progress.emit)
         except flasher.FlashError as exc:
@@ -577,6 +584,9 @@ class DeviceDialog(QDialog):
         text = error.lower()
         if "access is denied" in text or "permission" in text or "busy" in text:
             return "The port is in use. Close other serial tools (Arduino, PlatformIO monitor) and retry."
+        if "did not come back" in text:
+            return ("The board didn't restart into download mode. Put it there by hand: "
+                    "hold BOOT, press and release RST, release BOOT. Re-scan, then Flash again.")
         if "wrong boot mode" in text or "failed to connect" in text or "no serial data" in text:
             if self.board.two_ports:
                 return "The chip didn't enter download mode. Hold BOOT while you press Flash Firmware."
