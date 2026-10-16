@@ -8,13 +8,13 @@
 
 > ⚠️ **Use at your own risk.** Using a bot may break Limbus Company's terms of service, and what happens to your account is on you. This project isn't affiliated with Project Moon and comes with no warranty (see `LICENSE`).
 
-> **Status: early.** The bot code from Charge-Grinder v3.5.3 runs on the ESP32 input backend and has completed a Mirror Dungeon run on an ESP32-S3. The ESP32-S2 (LOLIN S2 Mini) is untested. **Windows only.**
+> **Status: early.** The bot code from Charge-Grinder v3.5.4 runs on the ESP32 input backend and has completed a Mirror Dungeon run on an ESP32-S3. The ESP32-S2 (LOLIN S2 Mini) is untested. **Windows only.**
 
 ---
 
 ## 🔄 Coming from Activision?
 
-Activision was my first ESP32 port of Charge-Grinder. It worked, but it had too many problems (slow input, USB drops, version lock-ups) to keep patching, so I started over on a new codebase. **Charge-Grinder-ESP32 (Charge-Grinder-ESP32-Edition) replaces it**: the bot is taken fresh from Charge-Grinder v3.5.3 and runs on new firmware and a new device layer. Activision is now private, and new releases happen here.
+Activision was my first ESP32 port of Charge-Grinder. It worked, but it had too many problems (slow input, USB drops, version lock-ups) to keep patching, so I started over on a new codebase. **Charge-Grinder-ESP32 (Charge-Grinder-ESP32-Edition) replaces it**: the bot is taken fresh from Charge-Grinder v3.5.4 and runs on new firmware and a new device layer. Activision is now private, and new releases happen here.
 
 What's new:
 
@@ -213,6 +213,6 @@ version              app version, compared with the latest release
 
 This project is licensed under the **GNU General Public License v3.0**, same as the original. See `LICENSE` for details.
 
-- **Original Framework:** [Walpth/Charge-Grinder](https://github.com/Walpth/Charge-Grinder) by **Walpth** (GPL-3.0). The bot code, UI and image assets come from Charge-Grinder v3.5.3, and the human-like mouse paths are Walpth's work too ([trainer](https://github.com/Walpth/ideal-mouse-movements)).
+- **Original Framework:** [Walpth/Charge-Grinder](https://github.com/Walpth/Charge-Grinder) by **Walpth** (GPL-3.0). The bot code, UI and image assets come from Charge-Grinder v3.5.4, and the human-like mouse paths are Walpth's work too ([trainer](https://github.com/Walpth/ideal-mouse-movements)).
 - **Earlier ESP32 Port:** Activision by PhaiKub & Colors (now private), which this project replaces.
 - **ESP32 Edition:** Developed by PhaiKub (2026). New firmware and binary serial protocol, the ESP32 input backend with absolute mouse moves, more boards, the Board page with built-in firmware flasher and LED switch, and pausing through a lost USB connection.

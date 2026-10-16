@@ -21,6 +21,13 @@ import numpy as np
 import source.utils.params as p
 from source.utils.profiles import get_macro_profile, maybe_rhythm_jitter, randomize_with_profile
 
+# Per-monitor DPI awareness (v2), as upstream Charge-Grinder 3.5.4 does, so
+# window rects, captures and click coordinates are all in physical pixels.
+try:
+    ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
+except Exception:
+    pass
+
 _HOST = Path(__file__).resolve().parents[2] / "host"
 if _HOST.is_dir() and str(_HOST) not in sys.path:
     sys.path.insert(0, str(_HOST))

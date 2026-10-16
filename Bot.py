@@ -24,11 +24,11 @@ start_locations = {
     "MD": 1,
     "Start": 2,
     "enterInvert": 5,
-    "ConfirmTeam": 6,
-    "enterBonus": 12,
-    "Confirm.0": 15,
-    "refuse": 17,
-    "Confirm": 23
+    "ConfirmTeam": 8,
+    "enterBonus": 14,
+    "Confirm.0": 17,
+    "refuse": 19,
+    "Confirm": 25
 }
 
 def select_grace():
@@ -46,8 +46,10 @@ def dungeon_start():
         Action("MD", ver="Start"),
         lambda: time.sleep(1.4),
         lambda: win_click(1588, 567) if p.EXTREME and now_rgb.button("infinite_off") else None,
-        Action("Start"),
-        Action("enterInvert", ver="ConfirmTeam"),
+        Action("Start", retries=0),
+        Action("enterInvert", ver="connecting"),
+        lambda: time.sleep(4),
+        lambda: wait_while_condition(lambda: not now.button("ConfirmTeam"), timer=5),
         select_team,
         lambda: try_click.button("ConfirmTeam"),
         lambda: time.sleep(0.5),
@@ -61,52 +63,34 @@ def dungeon_start():
         lambda: now_click.button("starlight"),
         Action("Confirm.0", ver="refuse"),
 
-        lambda: time.sleep(0.2)
+        lambda: time.sleep(0.2),
 
+        lambda: now_click.button(f"giftSearch{'On' if not p.HOS_MODE else ''}"),
+        ClickAction(p.GIFTS[0]["checks"][2], ver="gifts!"),
+        lambda: ClickAction((1239, 395), ver="selected!").execute(try_click) if (p.BUFF[3] or p.GIFTS[0]['checks'][5] == 0) else None,
+        lambda: ClickAction((1239, 549), ver="selected!").execute(try_click) if (p.BUFF[3] or p.GIFTS[0]['checks'][5] == 1) else None,
+        lambda: ClickAction((1239, 703), ver="selected!").execute(try_click) if p.BUFF[9] else None,
+        ClickAction((1624, 882)),
     ]
 
-    if p.HOS_MODE is False:
+    if p.HOS_MODE:
         ACTIONS.extend([
-            lambda: now_click.button("giftSearchOn"),
-            ClickAction(p.GIFTS[0]["checks"][2], ver="gifts!"),
-            lambda: ClickAction((1239, 395), ver="selected!").execute(try_click) if (p.BUFF[3] or p.GIFTS[0]['checks'][5] == 0) else None,
-            lambda: ClickAction((1239, 549), ver="selected!").execute(try_click) if (p.BUFF[3] or p.GIFTS[0]['checks'][5] == 1) else None,
-            lambda: ClickAction((1239, 703), ver="selected!").execute(try_click) if p.BUFF[9] else None,
-            ClickAction((1624, 882)),#
-
-            lambda: wait_while_condition(lambda: not now.button("loading"), lambda: gui.press("space") if now.button("Confirm") else None, timer=5),
-            loading_halt
-            ])
-    else:
-        ACTIONS.extend([
-            lambda: now_click.button("giftSearch"),
-            ClickAction(p.GIFTS[0]["checks"][2], ver="gifts!"),
-            lambda: ClickAction((1239, 395), ver="selected!").execute(try_click) if (p.BUFF[3] or p.GIFTS[0]['checks'][5] == 0) else None,
-            lambda: ClickAction((1239, 549), ver="selected!").execute(try_click) if (p.BUFF[3] or p.GIFTS[0]['checks'][5] == 1) else None,
-            lambda: ClickAction((1239, 703), ver="selected!").execute(try_click) if p.BUFF[9] else None,
-            ClickAction((1624, 882)),
-
-            lambda: wait_while_condition(lambda: not now.button("loading"), lambda: gui.press("space") if now.button("Confirm") else None, timer=5),
-
-            lambda: ClickAction((985, 286)).execute(try_click),
+            lambda: wait_while_condition(lambda: not now.button("startGift"), lambda: gui.press("space") if now.button("Confirm") else None, timer=5),
+            lambda: ClickAction((1100, 286)).execute(try_click),
             lambda: time.sleep(1),
-            lambda: ClickAction((1060, 816)).execute(try_click),
-            lambda: time.sleep(1),
-            lambda: gui.press("enter"),
-            lambda: time.sleep(1),
-            lambda: gui.press("enter"),
-            lambda: time.sleep(1),
-            lambda: gui.press("enter"),
-            lambda: time.sleep(3),
-
-            loading_halt
-            ])
-
+            lambda: ClickAction((1060, 816)).execute(try_click)
+        ])
+    
+    ACTIONS.extend([
+        lambda: wait_while_condition(lambda: not now.button("loading"), lambda: gui.press("space") if (p.HOS_MODE or now.button("Confirm")) else None, timer=5),
+        loading_halt
+    ])
 
     failed = 0
     while True:
         try:
-            now_click.button("resume")
+            if now_click.button("resume"): 
+                wait_while_condition(lambda: now.button("Start"), timer=5),
             for key in start_locations.keys():
                 if now.button(key):
                     i = start_locations[key]
