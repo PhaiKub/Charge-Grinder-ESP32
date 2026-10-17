@@ -1,5 +1,8 @@
 # Build-only dependencies, not needed to run the app.
 #   uv run --with-requirements requirements-build.txt python release/build_windows.py
 -r requirements.txt
-nuitka>=2.5        # 2.3+ for --windows-console-mode, 2.5+ for Python 3.13
+# Pinned: Nuitka 4.3 builds an exe that crashes on start (access violation
+# when a compiled bound method is connected to a Qt signal, Nuitka issue
+# #4081). Move up only after the built exe has been run.
+nuitka==4.2.2
 zstandard>=0.15    # onefile compression
