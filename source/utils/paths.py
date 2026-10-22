@@ -82,7 +82,7 @@ REG = {
     "infinite_off"   : (1690,  500,   45,   30),
     "out_of_fuel"    : ( 750,  150,  424,   66),
     # regions not binded to an image
-    "money!"         : (1526,   52,   80,   30),
+    "money!"         : (1490,   45,   80,   40),
     "gifts!"         : (1173,  324,  129,  125),
     "selected!"      : (1682,  855,   30,   42),
 
@@ -273,6 +273,10 @@ PACKS = {
     'Textbook'                    : ((), (5,)),
     'BladeandArtwork'             : ((), (5,)),
     'TheUnsevering'               : ((), (5,)),
+    'StorefrontCampout'           : ((3, 4), (3, 4)),
+    'AnAnarchyofColors'           : ((), (4, 5)),
+    'CreedofPreservation'         : ((), (4, 5,)),
+    'ReadventofGluttony'          : ((), (4, 5,)),
     'HellsChicken'                : ((2,), (2,)),
     'SEA'                         : ((2,), (2, 3)),
     'MiracleinDistrict20'         : ((4,), (3, 4)),

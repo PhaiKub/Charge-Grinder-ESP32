@@ -642,7 +642,7 @@ class LocatePreset:
                 if isinstance(ver, str):
                     condition = lambda: not self.button(ver, wait=False, click=False, error=False)
                 else:
-                    condition = lambda: LocateGray.check(state0, image=screenshot(region=ver), wait=False, conf=0.98, method=1)
+                    condition = lambda: LocateGray.check(state0, image=screenshot(region=ver), wait=False, conf=0.985, method=1)
                     # print(LocateGray.get_conf(state0, image=gui.screenshot(region=ver)))
 
                 verified = wait_while_condition(condition, interval=0.1, timer=3)
@@ -730,15 +730,16 @@ class Action(BaseAction):
 
 
 class ClickAction(BaseAction):
-    def __init__(self, click: tuple, ver: tuple | str = None):
+    def __init__(self, click: tuple, ver: tuple | str = None, retries=3):
         self.click = click
         self.ver = ver
+        self.retries = retries
 
     def should_execute(self, _=None):
         return True
 
     def execute(self, preset: LocatePreset, ver=None):
-        return preset.button(click=self.click, ver=self.ver or ver)
+        return preset.button(click=self.click, ver=self.ver or ver, retries=self.retries)
     
 
 def chain_actions(preset: LocatePreset, actions: list):
