@@ -297,7 +297,7 @@ def select(sinners):
     input_with_fallback(
         "space",
         lambda: win_click(1728, 884, tsize=(200,  50)),
-        lambda: loc.button("loading", wait=5)
+        lambda: wait_while_condition(lambda: now.button("TOBATTLE"), timer=3)
     )
     loading_halt()
     return True
@@ -393,42 +393,30 @@ def fight(lux=False):
         max_defense = min(((len(p.SELECTED) - p.DEAD + int(p.DEAD == 0)) // 2), 5)
 
     while True:
+        print("battle loop")
         ck = False
         if loc.button("winrate", wait=1):
             time.sleep(0.1)
             ck = True
             is_focused = True
             try:
-                if p.HOS_MODE is False:
-                    gear_start = gui.center(LocateEdges.try_locate(PTH["gear"], region=(0, 761, 900, 179), conf=0.7))
-                    gear_end = gui.center(LocateEdges.try_locate(PTH["gear2"], region=(350, 730, 1570, 232), conf=0.7))
-                    is_focused = False
-                    # cv2.imwrite(f"data/battle_skills/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 150)))
-                    if lux or p.WINRATE: raise gui.ImageNotFoundException
-                    background = screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 10))
-                    # cv2.imwrite(f"data/battle_state/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100 - 55), 775, round(gear_end[0] - gear_start[0] - 200 + 125), 305)))
-                    chain(gear_start, gear_end, background)
+                if not p.HOS_MODE and (lux or p.WINRATE):
+                    raise gui.ImageNotFoundException
 
-                else:
-                    if defence_turns < max_defense:
-                        print(f"use defense!!!")
-                        gear_start = gui.center(LocateEdges.try_locate(PTH["gear"], region=(0, 761, 900, 179), conf=0.7))
-                        gear_end = gui.center(LocateEdges.try_locate(PTH["gear2"], region=(350, 730, 1570, 232), conf=0.7))
-                        # cv2.imwrite(f"data/battle_state/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100 - 55), 775, round(gear_end[0] - gear_start[0] - 200 + 125), 305)))
-                        defense_skill(gear_start, gear_end)
-                        is_focused = False
-                        # cv2.imwrite(f"data/battle_skills/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 150)))
-                        background = screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 10))
-                        chain(gear_start, gear_end, background, is_defense=True)
-                        defence_turns += 1
-                    else:
-                        gear_start = gui.center(LocateEdges.try_locate(PTH["gear"], region=(0, 761, 900, 179), conf=0.7))
-                        gear_end = gui.center(LocateEdges.try_locate(PTH["gear2"], region=(350, 730, 1570, 232), conf=0.7))
-                        is_focused = False
-                        # cv2.imwrite(f"data/battle_skills/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 150)))
-                        background = screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 10))
-                        # cv2.imwrite(f"data/battle_state/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100 - 55), 775, round(gear_end[0] - gear_start[0] - 200 + 125), 305)))
-                        chain(gear_start, gear_end, background)
+                time.sleep(0.4)
+                gear_start = gui.center(LocateEdges.try_locate(PTH["gear"], region=(0, 761, 900, 179), conf=0.7))
+                gear_end = gui.center(LocateEdges.try_locate(PTH["gear2"], region=(350, 730, 1570, 232), conf=0.7))
+                is_focused = False
+
+                use_defense = p.HOS_MODE and defence_turns < max_defense
+                if use_defense:
+                    print("use defense!!!")
+                    defense_skill(gear_start, gear_end)
+                    defence_turns += 1
+                
+                background = screenshot(region=(round(gear_start[0] + 100), 775, round(gear_end[0] - gear_start[0] - 200), 10))
+                # cv2.imwrite(f"data/battle_state/{time.time()}.png", screenshot(region=(round(gear_start[0] + 100 - 55), 775, round(gear_end[0] - gear_start[0] - 200 + 125), 305)))
+                chain(gear_start, gear_end, background, is_defense=use_defense)
 
                 # success check
                 time.sleep(1)
@@ -455,12 +443,14 @@ def fight(lux=False):
             event()
 
         if now.button("ego_warning"): # skip corrosion
+            print("ego corrosion detected")
             ck = True
             gui.mouseDown()
             wait_while_condition(lambda: loc.button("ego_warning", wait=1), interval=0)
             gui.mouseUp()
 
         if (ego_image := is_ego()) is not None: # skip EGO animation
+            print("ego detected")
             ck = True
             gui.mouseDown()
             wait_while_condition(lambda: LocateRGB.check(ego_image, region=REG["ego_usage"], wait=1), interval=0)
