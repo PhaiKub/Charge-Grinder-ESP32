@@ -42,3 +42,6 @@ testing/
 .env.*
 /settings*.json
 .chargegrinder-webhook-outbox-*.json
+
+# Local AI assistant notes
+/CLAUDE.md
